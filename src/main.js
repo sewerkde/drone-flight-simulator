@@ -252,7 +252,8 @@ resize();
 const VIEWS = ['fpv', 'chase'];
 const viewName = () =>
   t(view === 'chase' ? 'view.chase' : drone.kind === 'plane' ? (VEHICLES[settings.drone].kind === 'real' ? 'view.cockpit' : 'view.nose') : 'view.drone');
-let view = VIEWS.includes(settings.view) ? settings.view : 'chase';
+// her uçuş drone'u sahnede gösteren takip kamerasıyla başlar (V ile değişir)
+let view = 'chase';
 const chasePos = new THREE.Vector3(0, 0.42, 1.0);
 const _v = new THREE.Vector3();
 
