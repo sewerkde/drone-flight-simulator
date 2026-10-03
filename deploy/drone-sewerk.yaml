@@ -1,0 +1,141 @@
+# drone.sewerk.de: statik simülatör (nginx) + online odalar (rooms.py), tek pod.
+# Kod GitHub'daki sabit commit'ten init kapsayıcısıyla çekilir; imaj derlemeye gerek yok.
+# Güncelleme: REV'i yeni commit'e çek, `kubectl apply -f` yeter.
+# Herkese açık yol: Cloudflare (HTTPS) → haproxy-public-ingress → bu servis. Ana sitenin kaynaklarına dokunmaz.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: drone
+  labels:
+    app.kubernetes.io/part-of: drone-flight-simulator
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: drone-head
+  namespace: drone
+data:
+  # index.html <head> içine eklenir: yerel kumanda köprüsü kapalı, odalar wss, paylaşım önizlemesi
+  head.html: |
+      <meta name="rc-bridge" content="off">
+      <meta name="rooms-url" content="wss://drone.sewerk.de/rooms">
+      <meta name="description" content="Fly a drone in your browser over real places — with a real DJI RC-N3, a gamepad, the keyboard or touch. Google 3D, satellite and OpenStreetMap worlds, online rooms. Open source.">
+      <link rel="canonical" href="https://drone.sewerk.de/">
+      <meta property="og:type" content="website">
+      <meta property="og:url" content="https://drone.sewerk.de/">
+      <meta property="og:title" content="Drone Flight Simulator">
+      <meta property="og:description" content="Fly a drone in your browser over real places — with a real DJI RC-N3, a gamepad, the keyboard or touch. Open source.">
+      <meta property="og:image" content="https://drone.sewerk.de/docs/launcher.jpg">
+      <meta name="twitter:card" content="summary_large_image">
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drone
+  namespace: drone
+  labels: { app: drone }
+spec:
+  replicas: 1 # odalar bellekte tutulur: tek kopya
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: drone }
+  template:
+    metadata:
+      labels: { app: drone }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10101
+        runAsGroup: 10101
+        fsGroup: 10101
+        seccompProfile: { type: RuntimeDefault }
+      initContainers:
+        - name: fetch
+          image: alpine/git:2.54.0
+          env:
+            - { name: REV, value: "c5d247065c59a62c6f237d4edb9a2def1fe6aa08" }
+            - { name: HOME, value: /tmp }
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -e
+              git clone --quiet --filter=blob:none https://github.com/sewerkde/drone-flight-simulator.git /app/www
+              cd /app/www && git checkout --quiet "$REV" && rm -rf .git
+              sed -i '/name="viewport"/r /cfg/head.html' index.html
+              grep -q 'rooms-url' index.html
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          volumeMounts:
+            - { name: app, mountPath: /app }
+            - { name: head, mountPath: /cfg }
+      containers:
+        - name: web
+          image: nginxinc/nginx-unprivileged:1.31.6-alpine
+          ports: [{ name: http, containerPort: 8080 }]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          readinessProbe:
+            httpGet: { path: /, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /, port: http }
+            periodSeconds: 30
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 300m, memory: 64Mi }
+          volumeMounts:
+            - { name: app, mountPath: /usr/share/nginx/html, subPath: www, readOnly: true }
+        - name: rooms
+          image: python:3.12.15-alpine
+          command: ["python", "/app/www/rooms.py", "8766", "0.0.0.0"]
+          ports: [{ name: rooms, containerPort: 8766 }]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          readinessProbe:
+            tcpSocket: { port: rooms }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 500m, memory: 128Mi }
+          volumeMounts:
+            - { name: app, mountPath: /app, readOnly: true }
+      volumes:
+        - name: app
+          emptyDir: { sizeLimit: 64Mi }
+        - name: head
+          configMap: { name: drone-head }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: drone
+  namespace: drone
+spec:
+  selector: { app: drone }
+  ports:
+    - { name: http, port: 80, targetPort: http }
+    - { name: rooms, port: 8766, targetPort: rooms }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: haproxy-public-ingress
+  namespace: drone
+spec:
+  ingressClassName: haproxy
+  rules:
+    - host: drone.sewerk.de
+      http:
+        paths:
+          - path: /rooms
+            pathType: Prefix
+            backend: { service: { name: drone, port: { number: 8766 } } }
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: drone, port: { number: 80 } } }

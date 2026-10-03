@@ -225,7 +225,8 @@ renderThumbs();
 // Kumanda kaynakları: serve.py köprüsü (yerel DJI) > USB/Web Serial DJI (Chrome) > gamepad/RC verici > dokunmatik.
 // Yayında köprü yoksa: <meta name="rc-bridge" content="off">
 const rc = createControllers({
-  bridge: document.querySelector('meta[name="rc-bridge"]')?.content !== 'off',
+  // yerel USB köprüsü (serve.py) yalnız localhost'ta; yayında Web Serial / gamepad / klavye
+  bridge: document.querySelector('meta[name="rc-bridge"]')?.content !== 'off' && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname),
   gamepad: { preset: settings.gamepadPreset },
   touch: { labels: { takeoff: t('takeoff'), land: t('land'), rth: t('rth'), view: t('viewBtn') } },
 });
@@ -740,7 +741,11 @@ function begin() {
 }
 
 // ---- online odalar (rooms.py). Yayında <meta name="rooms-url" content="wss://..."> ile adres verilir.
-const ROOMS_URL = document.querySelector('meta[name="rooms-url"]')?.content || `ws://${location.hostname || 'localhost'}:8766`;
+const ROOMS_URL =
+  document.querySelector('meta[name="rooms-url"]')?.content ||
+  (/^(localhost|127\.0\.0\.1|\[::1\])?$/.test(location.hostname)
+    ? `ws://${location.hostname || 'localhost'}:8766`
+    : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/rooms`);
 // Hazır yerlerde oda adı koordinattır (lobide gösterilir). Kendi konumu / elle girilen koordinatta
 // gerçek konum paylaşılmasın diye yalnız koordinattan üretilen kısa bir kod kullanılır.
 const isPreset = (p) => PLACES.some((q) => q.lat === p?.lat && q.lon === p?.lon);
@@ -1394,8 +1399,10 @@ let fps = 60;
 let worldWasReady = false;
 let soundHint = false;
 
-// Google modunda durum günlüğü (anahtar asla gönderilmez): serve.py → logs/client.log
-if (realWorld) {
+// Yerel geliştirmede durum günlüğü (anahtar asla gönderilmez): serve.py → logs/client.log.
+// Yayında (localhost değilken) hiçbir şey gönderilmez.
+const IS_LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+if (realWorld && IS_LOCAL) {
   setInterval(() => {
     const body = JSON.stringify({ ...world.stats(), fps: Math.round(fps), state: drone.state, place: settings.place.name, h: +drone.height.toFixed(1), ua: navigator.userAgent.slice(-40) });
     fetch('/log', { method: 'POST', body }).catch(() => {});
