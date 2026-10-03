@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lobby Test</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="stylesheet" href="../src/lobby.css">
+  <script type="importmap">{ "imports": { "three": "../vendor/three.module.min.js" } }</script>
+  <style>
+    html, body { overflow: auto; }
+    body { display: grid; place-items: start center; padding: 24px 0; }
+    .card { padding: 0; width: min(860px, calc(100vw - 32px)); }
+    .t-bar { display: flex; gap: 8px; align-items: center; padding: 14px 28px 0; }
+    #out { margin: 0; padding: 0 28px 16px; font: 12px var(--mono); color: var(--muted); min-height: 1.4em; }
+    @media (max-width: 700px) {
+      body { padding: 0; }
+      .card { width: 100vw; border-radius: 0; border: 0; }
+      .l-sec, .t-bar, #out { padding-left: 16px; padding-right: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Bağımsız deneme: ?rooms=ws://localhost:8796 &lang=en|tr|de -->
+  <div class="card">
+    <div class="t-bar seg lang-seg" style="border: 0; background: none">
+      <button type="button" data-lang="en">EN</button>
+      <button type="button" data-lang="tr">TR</button>
+      <button type="button" data-lang="de">DE</button>
+    </div>
+    <section class="l-sec"><div id="lobby"></div></section>
+    <pre id="out"></pre>
+  </div>
+  <script type="module">
+    import { settings } from '../src/settings.js';
+    import { createLobby } from '../src/lobby.js';
+
+    const qs = new URLSearchParams(location.search);
+    settings.lang = qs.get('lang') || 'en';
+    const lobby = createLobby({
+      el: document.getElementById('lobby'),
+      roomsUrl: qs.get('rooms') || `ws://${location.hostname || 'localhost'}:8766`,
+      onJoin: (j) => {
+        document.getElementById('out').textContent = `onJoin → ${JSON.stringify({ world: j.world, place: j.place?.name ?? null })}`;
+      },
+    });
+    lobby.start();
+    for (const b of document.querySelectorAll('[data-lang]')) {
+      b.onclick = () => {
+        settings.lang = b.dataset.lang;
+        lobby.setLang();
+      };
+    }
+    window.lobby = lobby;
+  </script>
+</body>
+</html>

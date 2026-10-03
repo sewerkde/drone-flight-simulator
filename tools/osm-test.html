@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OSM World Test</title>
+  <script type="importmap">{ "imports": { "three": "../vendor/three.module.min.js" } }</script>
+  <style>
+    html, body { margin: 0; height: 100%; background: #cddfee; overflow: hidden; font: 12px/1.4 system-ui, sans-serif; }
+    canvas { display: block; width: 100%; height: 100%; }
+    #info { position: fixed; left: 8px; top: 8px; padding: 6px 8px; background: rgba(0,0,0,.55); color: #fff; border-radius: 4px; white-space: pre; max-width: 46vw; }
+    #credits { position: fixed; right: 8px; bottom: 6px; color: #fff; text-shadow: 0 0 3px #000; font-size: 11px; }
+  </style>
+</head>
+<body>
+  <canvas id="view"></canvas>
+  <div id="info">…</div>
+  <div id="credits"></div>
+  <script type="module">
+    // Bağımsız deneme sayfası: ?place=dortmund|rome &q=normal|high|ultra &cam=x,y,z &look=x,y,z &orbit=1
+    import * as THREE from 'three';
+    import { buildOsmWorld } from '../src/world-osm.js';
+
+    const PLACES = {
+      dortmund: { lat: 51.4926, lon: 7.4519 },
+      rome: { lat: 41.89094, lon: 12.4919 },
+    };
+    const qs = new URLSearchParams(location.search);
+    const place = PLACES[qs.get('place')] || PLACES.dortmund;
+    const vec = (s, d) => (s ? s.split(',').map(Number) : d);
+
+    const canvas = document.getElementById('view');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, logarithmicDepthBuffer: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(55, 1, 0.05, 6000);
+    // main.js ile aynı ışıklar
+    scene.add(new THREE.HemisphereLight(0xcfe3ff, 0x4f5f33, 1.1));
+    const sun = new THREE.DirectionalLight(0xfff1dc, 2.4);
+    sun.position.set(-0.45, 0.8, 0.35).normalize().multiplyScalar(100);
+    scene.add(sun, sun.target);
+
+    const world = buildOsmWorld(scene, renderer, camera, { ...place, quality: qs.get('q') || 'high' });
+    window.__osm = world;
+    window.__cam = camera;
+    window.__scene = scene;
+    window.__THREE = THREE;
+
+    const camPos = new THREE.Vector3(...vec(qs.get('cam'), [0, 120, 160]));
+    const look = new THREE.Vector3(...vec(qs.get('look'), [0, 0, 0]));
+    window.__setView = (p, l) => {
+      camPos.set(...p);
+      look.set(...l);
+    };
+
+    function resize() {
+      renderer.setSize(innerWidth, innerHeight, false);
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+    }
+    addEventListener('resize', resize);
+    resize();
+
+    let frames = 0;
+    let fps = 0;
+    let fpsT = performance.now();
+    const info = document.getElementById('info');
+    function loop(now) {
+      requestAnimationFrame(loop);
+      if (qs.get('orbit')) {
+        const a = now / 1000 * 0.15;
+        camera.position.set(look.x + Math.sin(a) * camPos.z, camPos.y, look.z + Math.cos(a) * camPos.z);
+      } else camera.position.copy(camPos);
+      camera.lookAt(look);
+      world.update(camera, now);
+      renderer.render(scene, camera);
+      frames++;
+      if (now - fpsT > 1000) {
+        fps = (frames * 1000) / (now - fpsT);
+        frames = 0;
+        fpsT = now;
+        const s = world.stats();
+        info.textContent = `${world.kind} ${world.phase} stage ${world.stage} ${(world.progress * 100).toFixed(0)}% · ${fps.toFixed(0)} fps\n` +
+          `istek ${s.requests} (${s.kb} KB, hata ${s.failed}) · bina ${s.buildings} · ağaç ${s.trees}\n` +
+          `tris ${renderer.info.render.triangles} · çağrı ${renderer.info.render.calls}\n` +
+          `ms ${JSON.stringify(s.ms)}` + (s.error ? `\nHATA ${s.error}` : '');
+      }
+      document.getElementById('credits').textContent = world.credits(now);
+    }
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

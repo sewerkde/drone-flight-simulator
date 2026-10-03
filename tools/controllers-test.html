@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Controller Test</title>
+<!-- Birleşik kumandanın (src/controllers.js) canlı değerleri; elle deneme için.
+     http://localhost:8765/tools/controllers-test.html   ?touch=1 dokunmatik arayüzü zorla, ?bridge=0 serve.py'yi atla,
+     ?preset=standard|aetr|taer oyun kolu hazır ayarı -->
+<style>
+  :root {
+    --bg: #0d0f12; --card: #15181d; --line: rgba(255,255,255,.12); --text: #f4f6f8; --muted: rgba(244,246,248,.6);
+    --accent: #2f8cff; --ok: #3ccf6e; --warn: #ffb020; --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    padding: 16px 16px 240px; -webkit-font-smoothing: antialiased; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 16px; font-size: 13px; }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; min-width: 0; }
+  .card h2 { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 0 0 10px; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; }
+  dt { color: var(--muted); }
+  dd { margin: 0; font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; vertical-align: middle; }
+  .dot.ok { background: var(--ok); }
+  .src { font-size: 22px; font-weight: 600; }
+  .pads { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+  .pad { width: 108px; }
+  .box { position: relative; width: 108px; height: 108px; border: 1px solid var(--line); border-radius: 10px; }
+  .box::before, .box::after { content: ''; position: absolute; background: var(--line); }
+  .box::before { left: 50%; top: 6px; bottom: 6px; width: 1px; }
+  .box::after { top: 50%; left: 6px; right: 6px; height: 1px; }
+  .box i { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--accent); left: 50%; top: 50%; }
+  .wheel { position: relative; width: 14px; height: 108px; border: 1px solid var(--line); border-radius: 7px; }
+  .wheel i { position: absolute; left: 1px; right: 1px; height: 10px; margin-top: -5px; border-radius: 5px; background: var(--accent); top: 50%; }
+  .vals { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 6px; white-space: pre; }
+  .btns { display: flex; flex-wrap: wrap; gap: 6px; }
+  .btns span { font-family: var(--mono); font-size: 12px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); }
+  .btns span.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  #log { font-family: var(--mono); font-size: 12px; margin: 0; max-height: 220px; overflow: auto; white-space: pre-wrap; color: var(--muted); }
+  #log b { color: var(--text); font-weight: 500; }
+  button, select { font: inherit; color: var(--text); background: rgba(255,255,255,.08); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+  button { cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+  .err { color: var(--warn); font-size: 12px; }
+</style>
+</head>
+<body>
+  <h1>Controller test</h1>
+  <p class="sub">Live values of <code>createControllers()</code>. Priority: serve.py bridge &gt; DJI RC via Web Serial &gt; gamepad / RC transmitter &gt; touch.</p>
+
+  <div class="grid">
+    <section class="card">
+      <h2>Active source</h2>
+      <div class="src"><span id="liveDot" class="dot"></span><span id="source">none</span></div>
+      <dl style="margin-top:10px">
+        <dt>sourceName</dt><dd id="sourceName">–</dd>
+        <dt>live</dt><dd id="live">–</dd>
+        <dt>connected</dt><dd id="connected">–</dd>
+        <dt>status</dt><dd id="status">–</dd>
+        <dt>switchMode</dt><dd id="switchMode">–</dd>
+        <dt>rawButtons</dt><dd id="raw">–</dd>
+      </dl>
+    </section>
+
+    <section class="card">
+      <h2>Sticks (Mode 2)</h2>
+      <div class="pads">
+        <div class="pad"><div class="box"><i id="kl"></i></div><div class="vals" id="vl"></div></div>
+        <div class="pad"><div class="box"><i id="kr"></i></div><div class="vals" id="vr"></div></div>
+        <div><div class="wheel"><i id="kw"></i></div><div class="vals" id="vw"></div></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Buttons</h2>
+      <div class="btns" id="btns"></div>
+      <h2 style="margin-top:14px">Events</h2>
+      <pre id="log"></pre>
+    </section>
+
+    <section class="card">
+      <h2>Sources</h2>
+      <dl id="sources"></dl>
+      <div class="row">
+        <button id="serialBtn">Connect DJI RC (USB)</button>
+        <button id="serialOff">Disconnect</button>
+      </div>
+      <div class="err" id="serialErr"></div>
+      <div class="row">
+        <label for="preset">Gamepad preset</label>
+        <select id="preset">
+          <option value="auto">auto</option>
+          <option value="standard">standard</option>
+          <option value="aetr">aetr</option>
+          <option value="taer">taer</option>
+        </select>
+      </div>
+      <div class="row" id="toggles"></div>
+    </section>
+
+    <section class="card">
+      <h2>Raw gamepad</h2>
+      <dl id="pad"></dl>
+    </section>
+  </div>
+
+<script type="module">
+  import { createControllers, BUTTON_NAMES, SOURCES } from '../src/controllers.js';
+
+  const q = new URLSearchParams(location.search);
+  const $ = (id) => document.getElementById(id);
+  const ctl = createControllers({
+    bridge: q.get('bridge') === '0' ? false : '/rc',
+    gamepad: { preset: q.get('preset') || 'auto' },
+    touch: { force: q.get('touch') === '1' },
+  });
+  window.ctl = ctl; // CDP testleri için
+  $('preset').value = q.get('preset') || 'auto';
+
+  const log = [];
+  const t0 = performance.now();
+  const add = (kind, text) => {
+    log.unshift(`${((performance.now() - t0) / 1000).toFixed(2).padStart(7)}  ${kind.padEnd(6)} <b>${text}</b>`);
+    log.length = Math.min(log.length, 40);
+    $('log').innerHTML = log.join('\n');
+  };
+  window.ctlLog = log;
+  ctl.onButton = (n) => add('button', n);
+  ctl.onMode = (m) => add('mode', m);
+  ctl.onChange = (l) => add('live', String(l));
+  ctl.onSource = (s, n) => add('source', `${s}${n ? ` (${n})` : ''}`);
+
+  $('btns').innerHTML = BUTTON_NAMES.map((n) => `<span data-b="${n}">${n}</span>`).join('');
+  $('toggles').innerHTML = SOURCES.map((s) => `<label><input type="checkbox" data-s="${s}" checked> ${s}</label>`).join(' ');
+  $('toggles').onchange = (e) => ctl.setEnabled(e.target.dataset.s, e.target.checked);
+  $('preset').onchange = (e) => ctl.setGamepadPreset(e.target.value);
+  $('serialBtn').disabled = !ctl.serialSupported;
+  if (!ctl.serialSupported) $('serialErr').textContent = 'Web Serial not available (needs desktop Chrome/Edge).';
+  $('serialBtn').onclick = async () => {
+    $('serialErr').textContent = '';
+    try {
+      await ctl.connectSerial();
+    } catch (e) {
+      $('serialErr').textContent = e.message;
+    }
+  };
+  $('serialOff').onclick = () => ctl.disconnectSerial();
+
+  const f = (v) => (v >= 0 ? ' ' : '') + v.toFixed(2);
+  const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const yes = (v) => `<span class="dot ${v ? 'ok' : ''}"></span>${v}`;
+  function render() {
+    const s = ctl.sticks;
+    $('source').textContent = ctl.source;
+    $('liveDot').className = `dot ${ctl.live ? 'ok' : ''}`;
+    $('sourceName').textContent = ctl.sourceName || '–';
+    $('live').innerHTML = yes(ctl.live);
+    $('connected').innerHTML = yes(ctl.connected);
+    $('status').textContent = ctl.status;
+    $('switchMode').textContent = ctl.switchMode ?? '–';
+    $('raw').textContent = ctl.rawButtons ? [...ctl.rawButtons].slice(0, 24).map((v) => v.toString(16).padStart(2, '0')).join(' ') : '–';
+    $('kl').style.transform = `translate(${s.lh * 47}px, ${-s.lv * 47}px)`;
+    $('kr').style.transform = `translate(${s.rh * 47}px, ${-s.rv * 47}px)`;
+    $('kw').style.transform = `translateY(${-s.wheel * 47}px)`;
+    $('vl').textContent = `yaw ${f(s.lh)}\nthr ${f(s.lv)}`;
+    $('vr').textContent = `roll ${f(s.rh)}\npit ${f(s.rv)}`;
+    $('vw').textContent = `whl\n${f(s.wheel)}`;
+    for (const el of $('btns').children) el.classList.toggle('on', !!ctl.buttons[el.dataset.b]);
+
+    const b = ctl.bridge, r = ctl.serial, g = ctl.gamepad, t = ctl.touch;
+    $('sources').innerHTML = [
+      ['bridge', b ? `${yes(b.live)} · server ${b.connected ? 'up' : 'down'} · ${esc(b.status)}` : 'off'],
+      ['serial', r ? `${yes(r.live)} · ${esc(r.status)}` : ctl.serialSupported ? 'not connected' : 'unsupported'],
+      ['gamepad', g ? (g.supported ? `${yes(g.live)} · ${esc(g.status)}` : 'unsupported') : 'off'],
+      ['touch', t ? `${yes(t.live)} · ${t.enabled ? (t.visible ? 'shown' : 'hidden') : 'not a touch device'}` : 'off'],
+    ].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+
+    let gp = null;
+    try { gp = [...(navigator.getGamepads?.() || [])].find((p) => p && p.index === g?.pad?.index); } catch {}
+    $('pad').innerHTML = gp
+      ? `<dt>id</dt><dd>${esc(gp.id)}</dd><dt>mapping</dt><dd>${esc(gp.mapping || '(none)')}</dd>` +
+        `<dt>preset</dt><dd>${g.activePreset}</dd>` +
+        `<dt>axes</dt><dd>${gp.axes.map((v, i) => `${i}:${f(v)}`).join('  ')}</dd>` +
+        `<dt>buttons</dt><dd>${gp.buttons.map((x, i) => (x.pressed || x.value > 0.05 ? `${i}:${x.value.toFixed(2)}` : '')).filter(Boolean).join('  ') || '–'}</dd>`
+      : '<dt>–</dt><dd>No gamepad. Press a button on it once (browsers hide pads until then).</dd>';
+    requestAnimationFrame(render);
+  }
+  render();
+</script>
+</body>
+</html>

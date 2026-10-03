@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Drone Flight Simulator</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%232f8cff'/%3E%3Ctext x='16' y='22' font-size='17' font-family='sans-serif' font-weight='700' text-anchor='middle' fill='white'%3EH%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="src/lobby.css">
+  <link rel="stylesheet" href="src/rc-setup.css">
+  <script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+</head>
+<body class="prestart">
+  <canvas id="view"></canvas>
+
+  <div id="hud">
+    <div class="topbar">
+      <div class="tb-left">
+        <button id="mode" class="mode" data-i18n-title="flightModeTitle">N</button>
+        <span id="state" class="state"></span>
+      </div>
+      <div class="tb-right">
+        <div class="tb-status">
+          <span id="wind" class="tb-item warn hidden"></span>
+          <span id="onlineBox" class="tb-item hidden"><i id="onlineDot" class="dot"></i><b id="onlineText"></b></span>
+          <span class="tb-item tb-link"><i id="linkDot" class="dot"></i><b id="linkText"></b></span>
+          <span class="tb-item tb-gps">GPS <b>18</b></span>
+          <span class="tb-item" id="battBox">
+            <span class="batt"><i id="battFill"></i></span><b id="battText">100%</b>
+          </span>
+          <span class="tb-item tb-time"><b id="ftime">00:00</b></span>
+        </div>
+        <button id="btnSettings" class="tb-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg><span data-i18n="settings"></span></button>
+      </div>
+    </div>
+
+    <div id="course" class="course"></div>
+    <div id="toast" class="toast"></div>
+    <div id="rec" class="rec hidden"><i></i>REC <span id="recTime">00:00</span></div>
+    <div id="viewName" class="view-name"></div>
+
+    <div class="gimbal">
+      <div class="g-track"><div id="gimbalMark" class="g-mark"></div></div>
+      <span id="gimbalText">-12°</span>
+    </div>
+
+    <div id="pilotMark" class="pilot-mark hidden"><i></i><span></span></div>
+    <div id="homeMark" class="home-mark hidden"><svg class="hm-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 12H5z"/></svg><b>H</b><span id="homeDist"></span></div>
+
+    <canvas id="map" class="map" width="360" height="360"></canvas>
+
+    <div class="telemetry">
+      <div><span>H</span><b id="tH">0.0</b><em>m</em></div>
+      <div><span>D</span><b id="tD">0</b><em>m</em></div>
+      <div><span>H.S</span><b id="tHS">0.0</b><em>m/s</em></div>
+      <div><span>V.S</span><b id="tVS">0.0</b><em>m/s</em></div>
+      <div id="tThrBox" class="hidden"><span data-i18n="thr"></span><b id="tThr">0</b><em>%</em></div>
+    </div>
+
+    <div class="actions">
+      <button id="btnTakeoff" data-i18n-title="takeoff"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17V4M6.5 9.5 12 4l5.5 5.5M5 21h14"/></svg><span data-i18n="takeoff"></span><kbd>T</kbd></button>
+      <button id="btnLand" class="hidden" data-i18n-title="land"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v13M6.5 10.5 12 16l5.5-5.5M5 21h14"/></svg><span data-i18n="land"></span><kbd>L</kbd></button>
+      <button id="btnRth" data-i18n-title="rth"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11 12 4l8.5 7M6 9.5V20h12V9.5M10 20v-5h4v5"/></svg><span data-i18n="rth"></span><kbd>H</kbd></button>
+      <button id="btnView" data-i18n-title="viewBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6.5" width="13" height="11" rx="2"/><path d="m15.5 10.5 6-3.5v10l-6-3.5"/></svg><span data-i18n="viewBtn"></span><kbd>V</kbd></button>
+    </div>
+
+    <div id="rcPanel" class="rc-panel">
+      <button id="rcPanelHead" class="rcp-head" type="button" data-i18n-title="rcPanelTitle">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="7" width="20" height="11" rx="5.5"/><path d="M7.5 10.5v4M5.5 12.5h4"/><circle cx="15.5" cy="11.5" r="0.9"/><circle cx="17.8" cy="13.8" r="0.9"/></svg>
+        <i id="rcpDot" class="dot"></i><b id="rcpName"></b><em id="rcpMode"></em>
+        <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
+      </button>
+      <div class="rcp-body">
+        <div class="sticks">
+          <div class="stick-col">
+            <div class="stick"><i id="stL"></i></div>
+            <p><span data-i18n="rcThr"></span><b id="vThr">0</b></p>
+            <p><span data-i18n="rcYaw"></span><b id="vYaw">0</b></p>
+          </div>
+          <div class="stick-col wheel-col">
+            <div class="wheel"><i id="stW"></i></div>
+            <p><span data-i18n="rcGimbal"></span><b id="vGim">0</b></p>
+          </div>
+          <div class="stick-col">
+            <div class="stick"><i id="stR"></i></div>
+            <p><span data-i18n="rcPitch"></span><b id="vPitch">0</b></p>
+            <p><span data-i18n="rcRoll"></span><b id="vRoll">0</b></p>
+          </div>
+        </div>
+        <pre id="debug" class="debug hidden"></pre>
+      </div>
+    </div>
+
+    <div id="coach" class="coach hidden">
+      <b data-i18n="coachTitle"></b>
+      <div id="coachBody"></div>
+    </div>
+
+    <div id="flash" class="flash"></div>
+
+    <div id="crash" class="crash hidden">
+      <h2 id="crashTitle" data-i18n="crashTitle"></h2>
+      <p data-i18n="crashHelp"></p>
+      <button id="btnReset" data-i18n="restart"></button>
+    </div>
+
+    <div id="credits" class="credits"></div>
+  </div>
+
+  <div id="welcome" class="overlay hidden">
+    <div class="card welcome-card">
+      <div class="wc-hero">
+        <div class="wc-grid"></div>
+        <img id="welcomeImg" alt="">
+        <div class="wc-brand"><svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M10 10l12 12M22 10 10 22"/><circle cx="8" cy="8" r="4.2"/><circle cx="24" cy="8" r="4.2"/><circle cx="8" cy="24" r="4.2"/><circle cx="24" cy="24" r="4.2"/><rect x="12.5" y="12.5" width="7" height="7" rx="2"/></svg><span data-i18n="title"></span></div>
+      </div>
+      <div class="wc-main">
+        <div class="seg lang-seg">
+          <button type="button" data-lang="en">EN</button>
+          <button type="button" data-lang="tr">TR</button>
+          <button type="button" data-lang="de">DE</button>
+        </div>
+        <h1 data-i18n="welcomeTitle"></h1>
+        <p class="sub" data-i18n="welcomeSub"></p>
+        <form id="welcomeForm" class="welcome-form" onsubmit="return false">
+          <input id="welcomeName" class="search" type="text" maxlength="20" data-i18n-ph="pilotNamePh" autocomplete="nickname" spellcheck="false">
+          <button type="submit" class="primary big" data-i18n="continue"></button>
+        </form>
+        <p id="welcomeMsg" class="msg"></p>
+        <ul class="wc-feats">
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3z"/><path d="M9 4v13M15 7v13"/></svg><span data-i18n="feat1"></span></li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="7" width="20" height="11" rx="5.5"/><path d="M7.5 10.5v4M5.5 12.5h4"/><circle cx="15.5" cy="11.5" r="0.9"/><circle cx="17.8" cy="13.8" r="0.9"/></svg><span data-i18n="feat2"></span></li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2c2.9.3 5 2.6 5 5.8"/></svg><span data-i18n="feat3"></span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div id="start" class="overlay">
+    <div class="card launcher">
+      <header class="l-head">
+        <div class="l-brand">
+          <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M10 10l12 12M22 10 10 22"/><circle cx="8" cy="8" r="4.2"/><circle cx="24" cy="8" r="4.2"/><circle cx="8" cy="24" r="4.2"/><circle cx="24" cy="24" r="4.2"/><rect x="12.5" y="12.5" width="7" height="7" rx="2"/></svg>
+          <div>
+            <h1 data-i18n="title"></h1>
+            <p class="sub" id="subtitle"></p>
+          </div>
+        </div>
+        <div class="l-head-right">
+          <div class="seg lang-seg" id="langSeg">
+            <button type="button" data-lang="en">EN</button>
+            <button type="button" data-lang="tr">TR</button>
+            <button type="button" data-lang="de">DE</button>
+          </div>
+          <div id="rcBadge" class="rc-badge"><i class="dot"></i><span data-i18n="rcSearching"></span></div>
+        </div>
+      </header>
+
+      <div class="l-body">
+        <div class="l-main">
+          <nav class="l-tabs" role="tablist">
+            <button type="button" role="tab" data-tab="vehicle" class="on"><em>01</em><span><b data-i18n="secVehicle"></b><small id="tabVehicle"></small></span></button>
+            <button type="button" role="tab" data-tab="place"><em>02</em><span><b data-i18n="sumPlace"></b><small id="tabPlace"></small></span></button>
+            <button type="button" role="tab" data-tab="online"><em>03</em><span><b>Online</b><small id="tabOnline"></small></span></button>
+            <button type="button" role="tab" data-tab="help"><em>?</em><span><b data-i18n="controls"></b><small data-i18n="tabHelpSub"></small></span></button>
+          </nav>
+          <section class="l-sec pane on" data-pane="vehicle">
+            <div id="droneCards" class="drone-cards"></div>
+            <div class="speed-row">
+              <span data-i18n="speed"></span>
+              <input type="range" id="speedMul" min="1" max="5" step="0.25" data-i18n-aria="speedMul">
+              <b id="speedVal"></b>
+            </div>
+            <div class="pane-foot"><button type="button" id="nextVehicle" class="next-btn"><span data-i18n="nextPlace"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></div>
+          </section>
+
+          <section class="l-sec pane" data-pane="place">
+            <div class="world-tiles">
+              <button type="button" data-world="sat"><b data-i18n="worldSat"></b><span data-i18n="worldSatDesc"></span></button>
+              <button type="button" data-world="google"><b data-i18n="worldGoogle"></b><span data-i18n="worldGoogleDesc"></span></button>
+              <button type="button" data-world="osm"><b data-i18n="worldOsm"></b><span data-i18n="worldOsmDesc"></span></button>
+              <button type="button" data-world="village"><b data-i18n="worldVillage"></b><span data-i18n="worldVillageDesc"></span></button>
+            </div>
+            <div id="realBox">
+              <div class="place-tools">
+                <input id="placeSearch" class="search" type="search" data-i18n-ph="searchPh" autocomplete="off" spellcheck="false">
+                <button type="button" id="myLocBtn" class="loc-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7"/></svg><span data-i18n="useMyLocation"></span></button>
+              </div>
+              <p id="locMsg" class="hint loc-msg"></p>
+              <div id="placeTabs" class="place-tabs"></div>
+              <p id="dimLegend" class="hint dim-legend hidden"><i class="dim-badge d3">3D</i><span data-i18n="legend3d"></span><i class="dim-badge d2">2D</i><span data-i18n="legend2d"></span></p>
+              <div id="placeGrid" class="place-grid"></div>
+              <details class="more">
+                <summary data-i18n="coordSummary"></summary>
+                <input id="coord" class="search" type="text" data-i18n-ph="coordPh" spellcheck="false">
+              </details>
+              <div class="key-row">
+                <span id="keyState"></span>
+                <button type="button" id="keyEdit" class="link" data-i18n="change"></button>
+              </div>
+              <form id="keyForm" class="hidden" onsubmit="return false">
+                <input id="gKey" class="search" type="password" data-i18n-ph="keyPh" autocomplete="off" spellcheck="false">
+              </form>
+              <details id="keyGuide" class="more key-guide hidden">
+                <summary data-i18n="keyGuideTitle"></summary>
+                <ol data-i18n-html="keyGuideSteps"></ol>
+              </details>
+            </div>
+            <p id="villageNote" class="hint world-note"></p>
+            <div class="pane-foot"><button type="button" id="nextPlace" class="next-btn"><span data-i18n="usePlace"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></button></div>
+          </section>
+
+          <section class="l-sec pane" data-pane="online"><div id="lobby"></div></section>
+
+          <section class="l-sec pane help-pane" data-pane="help">
+            <div class="help">
+              <section>
+                <h3 data-i18n="ctrlRc"></h3>
+                <ul data-i18n-html="helpRc"></ul>
+              </section>
+              <section>
+                <h3 data-i18n="ctrlKb"></h3>
+                <ul data-i18n-html="helpKb"></ul>
+              </section>
+            </div>
+            <p class="tm-note" data-i18n="tmNote"></p>
+          </section>
+        </div>
+
+        <aside class="l-side">
+          <div class="sum-preview"><img id="sumImg" alt=""></div>
+          <div class="sum-head">
+            <b id="sumName"></b>
+            <span id="sumSpec"></span>
+          </div>
+          <dl class="sum-list">
+            <div><dt data-i18n="sumPlace"></dt><dd id="sumPlace"></dd></div>
+            <div><dt data-i18n="sumMap"></dt><dd id="sumMap"></dd></div>
+          </dl>
+          <div class="online-sec">
+            <label class="check-row"><input type="checkbox" id="onlineChk"> <span data-i18n="onlineFly"></span></label>
+            <input id="pilotName" class="search pilot-name" type="text" maxlength="20" data-i18n-ph="pilotNamePh" spellcheck="false" autocomplete="off">
+          </div>
+          <footer class="l-foot">
+            <button id="startRc" class="primary big" data-i18n="start"></button>
+            <p id="startMsg" class="msg"></p>
+            <button type="button" id="serialBtn" class="hidden" data-i18n="connectSerial"></button>
+          </footer>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+  <div id="loading" class="loading hidden">
+    <div class="ld-card">
+      <p class="ld-kicker" data-i18n="ldKicker"></p>
+      <h2 id="ldPlace"></h2>
+      <p id="ldSpot" class="ld-spot"></p>
+      <div class="ld-bar"><i id="ldFill"></i></div>
+      <ol class="ld-steps">
+        <li data-step="connected" data-i18n="stepConnect"></li>
+        <li data-step="tiles" data-i18n="stepTiles"></li>
+        <li data-step="ground" data-i18n="stepGround"></li>
+        <li data-step="detail" data-i18n="stepDetail"></li>
+      </ol>
+      <p id="ldTip" class="ld-tip"></p>
+      <p id="ldError" class="ld-error hidden"></p>
+      <div class="ld-actions">
+        <button id="ldFix" class="primary hidden" data-i18n="fixKey"></button>
+        <button id="ldCancel" data-i18n="cancel"></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="settings" class="panel settings hidden" role="dialog" aria-labelledby="setTitle">
+    <header class="set-head">
+      <h3 id="setTitle" data-i18n="settings"></h3>
+      <span class="set-key">Esc</span>
+      <button id="settingsClose" class="set-close" type="button" data-i18n-title="close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </header>
+    <div class="set-body">
+      <section class="set-group">
+        <h4 data-i18n="setFlight"></h4>
+        <div class="set-row"><label for="setDrone" data-i18n="secVehicle"></label><select id="setDrone"></select></div>
+        <div class="set-row col">
+          <div class="set-line"><label for="setSpeed" data-i18n="speed"></label><b id="setSpeedVal"></b></div>
+          <input type="range" id="setSpeed" min="1" max="5" step="0.25">
+        </div>
+        <div class="set-row"><label for="setMaxAlt" data-i18n="maxAlt"></label>
+          <select id="setMaxAlt">
+            <option value="120" data-i18n="maxAltDji"></option>
+            <option value="200">200 m</option>
+            <option value="300">300 m</option>
+            <option value="500">500 m</option>
+            <option value="1000">1000 m</option>
+            <option value="0" data-i18n="unlimited"></option>
+          </select>
+        </div>
+        <div class="set-row"><label for="setWind" data-i18n="wind"></label>
+          <select id="setWind">
+            <option value="0" data-i18n="windNone"></option>
+            <option value="1" data-i18n="windLight"></option>
+            <option value="2" data-i18n="windMedium"></option>
+            <option value="3" data-i18n="windStrong"></option>
+          </select>
+        </div>
+        <label class="set-row"><span data-i18n="battery"></span><input type="checkbox" class="switch" id="setBattery"></label>
+      </section>
+
+      <section class="set-group">
+        <h4 data-i18n="setController"></h4>
+        <button type="button" id="openRcSetup" class="next-btn rcs-open"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="7" width="20" height="11" rx="5.5"/><path d="M7.5 10.5v4M5.5 12.5h4"/><circle cx="15.5" cy="11.5" r="0.9"/><circle cx="17.8" cy="13.8" r="0.9"/></svg><span data-i18n="rcSetupOpen"></span></button>
+        <div class="set-row col">
+          <div class="set-line"><label for="setExpo" data-i18n="expo"></label><b id="expoVal"></b></div>
+          <input type="range" id="setExpo" min="0" max="0.7" step="0.05">
+        </div>
+        <p class="set-sub" data-i18n="invert"></p>
+        <label class="set-row"><span data-i18n="invLv"></span><input type="checkbox" class="switch" data-inv="lv"></label>
+        <label class="set-row"><span data-i18n="invLh"></span><input type="checkbox" class="switch" data-inv="lh"></label>
+        <label class="set-row"><span data-i18n="invRv"></span><input type="checkbox" class="switch" data-inv="rv"></label>
+        <label class="set-row"><span data-i18n="invRh"></span><input type="checkbox" class="switch" data-inv="rh"></label>
+        <label class="set-row"><span data-i18n="invWheel"></span><input type="checkbox" class="switch" data-inv="wheel"></label>
+        <label class="set-row"><span data-i18n="rcPanelSetting"></span><input type="checkbox" class="switch" id="setRcPanel"></label>
+        <label class="set-row"><span data-i18n="rawData"></span><input type="checkbox" class="switch" id="setDebug"></label>
+      </section>
+
+      <section class="set-group">
+        <h4 data-i18n="setDisplay"></h4>
+        <button type="button" id="warmBtn" class="next-btn rcs-open"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg><span data-i18n="warmBtn"></span></button>
+        <button type="button" id="warmRecBtn" class="next-btn rcs-open"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6.5" width="13" height="11" rx="2"/><path d="m15.5 10.5 6-3.5v10l-6-3.5"/></svg><span data-i18n="warmRecBtn"></span></button>
+        <div class="set-row"><label for="setQuality" data-i18n="quality"></label>
+          <select id="setQuality">
+            <option value="normal" data-i18n="qNormal"></option>
+            <option value="high" data-i18n="qHigh"></option>
+            <option value="ultra" data-i18n="qUltra"></option>
+          </select>
+        </div>
+        <div class="set-row"><label for="setLang" data-i18n="language"></label>
+          <select id="setLang">
+            <option value="en">English</option>
+            <option value="tr">Türkçe</option>
+            <option value="de">Deutsch</option>
+          </select>
+        </div>
+        <label class="set-row"><span data-i18n="engineSound"></span><input type="checkbox" class="switch" id="setSound"></label>
+        <div class="set-row col">
+          <div class="set-line"><label for="setVolume" data-i18n="volume"></label></div>
+          <input type="range" id="setVolume" min="0" max="1" step="0.05">
+        </div>
+      </section>
+
+      <section class="set-group">
+        <h4>Online</h4>
+        <label class="set-row"><span data-i18n="onlineSetting"></span><input type="checkbox" class="switch" id="setOnline"></label>
+      </section>
+    </div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
