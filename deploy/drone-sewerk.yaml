@@ -28,6 +28,41 @@ data:
       <meta property="og:image" content="https://drone.sewerk.de/docs/launcher.jpg">
       <meta name="twitter:card" content="summary_large_image">
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: drone-nginx
+  namespace: drone
+data:
+  # uygulama dosyaları her açılışta doğrulanır (değişmediyse 304): güncellemeler Cloudflare'de takılmaz.
+  # büyük, seyrek değişen dosyalar 1 gün önbellekte. Depo iç dosyaları servis edilmez.
+  default.conf: |
+    server {
+        listen 8080;
+        server_name _;
+        root /usr/share/nginx/html;
+        index index.html;
+        server_tokens off;
+        location / {
+            include /etc/nginx/conf.d/security.inc;
+            add_header Cache-Control "no-cache" always;
+            try_files $uri $uri/ =404;
+        }
+        location ~* ^/(vendor|assets|docs)/ {
+            include /etc/nginx/conf.d/security.inc;
+            add_header Cache-Control "public, max-age=86400" always;
+        }
+        location ~* ^/(deploy|tools)/ { return 404; }
+        location ~* \.(py|sh|command|yaml|yml)$ { return 404; }
+        location ~ /\. { return 404; }
+    }
+  security.inc: |
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Cross-Origin-Opener-Policy "same-origin" always;
+    add_header Permissions-Policy "geolocation=(self), serial=(self), gamepad=(self), camera=(), microphone=(), payment=()" always;
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -90,9 +125,16 @@ spec:
             limits: { cpu: 300m, memory: 64Mi }
           volumeMounts:
             - { name: app, mountPath: /usr/share/nginx/html, subPath: www, readOnly: true }
+            - { name: nginx, mountPath: /etc/nginx/conf.d, readOnly: true }
         - name: rooms
           image: python:3.12.15-alpine
           command: ["python", "/app/www/rooms.py", "8766", "0.0.0.0"]
+          env:
+            # yalnız bu siteden bağlanılır; IP başına ve toplam bağlantı sınırı
+            - { name: ROOMS_ORIGINS, value: "https://drone.sewerk.de" }
+            - { name: ROOMS_MAX_CONN, value: "400" }
+            - { name: ROOMS_MAX_PER_IP, value: "8" }
+            - { name: ROOMS_MAX_ROOMS, value: "300" }
           ports: [{ name: rooms, containerPort: 8766 }]
           securityContext:
             allowPrivilegeEscalation: false
@@ -110,6 +152,8 @@ spec:
           emptyDir: { sizeLimit: 64Mi }
         - name: head
           configMap: { name: drone-head }
+        - name: nginx
+          configMap: { name: drone-nginx }
 ---
 apiVersion: v1
 kind: Service

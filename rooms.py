@@ -22,6 +22,7 @@ import struct
 import sys
 import threading
 import time
+import os
 import urllib.parse
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8766
@@ -32,6 +33,14 @@ MAX_MSG = 4096  # bayt
 MAX_RATE = 40  # saniyede en fazla mesaj (fazlası düşer)
 MAX_LIST = 12  # /rooms: odada listelenen en fazla pilot
 MAX_ROOMS_LIST = 200  # /rooms: en fazla oda
+# kötüye kullanım sınırları (yayında ortam değişkeniyle ayarlanır)
+MAX_CONN_TOTAL = int(os.environ.get("ROOMS_MAX_CONN", "400"))  # aynı anda en fazla bağlantı
+MAX_CONN_PER_IP = int(os.environ.get("ROOMS_MAX_PER_IP", "8"))  # IP başına bağlantı
+MAX_ROOMS = int(os.environ.get("ROOMS_MAX_ROOMS", "300"))  # aynı anda en fazla oda
+HANDSHAKE_TIMEOUT = 10  # sn: yavaş el sıkışma (slowloris) düşer
+# boşsa her köken kabul (yerel geliştirme); yayında "https://drone.sewerk.de"
+ALLOWED_ORIGINS = {o.strip() for o in os.environ.get("ROOMS_ORIGINS", "").split(",") if o.strip()}
+conns = {"total": 0, "ip": {}}
 
 rooms = {}  # oda adı -> {id: Client}
 lock = threading.Lock()
@@ -138,7 +147,7 @@ def send_rooms(sock, head_only=False):
 class Handler(socketserver.BaseRequestHandler):
     def handle(self):
         sock = self.request
-        sock.settimeout(30)
+        sock.settimeout(HANDSHAKE_TIMEOUT)
         # ---- el sıkışma
         raw = b""
         while b"\r\n\r\n" not in raw:
@@ -161,6 +170,32 @@ class Handler(socketserver.BaseRequestHandler):
             else:
                 sock.sendall(b"HTTP/1.1 426 Upgrade Required\r\nContent-Length: 0\r\n\r\n")
             return
+        # gerçek istemci IP'si: Cloudflare → HAProxy → biz
+        ip = headers.get("cf-connecting-ip") or headers.get("x-forwarded-for", "").split(",")[0].strip() or self.client_address[0]
+        if ALLOWED_ORIGINS and headers.get("origin") not in ALLOWED_ORIGINS:
+            sock.sendall(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n")
+            return
+        with lock:
+            busy = conns["total"] >= MAX_CONN_TOTAL or conns["ip"].get(ip, 0) >= MAX_CONN_PER_IP
+            if not busy:
+                conns["total"] += 1
+                conns["ip"][ip] = conns["ip"].get(ip, 0) + 1
+        if busy:
+            sock.sendall(b"HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\n\r\n")
+            return
+        try:
+            self._session(sock, path, key)
+        finally:
+            with lock:
+                conns["total"] -= 1
+                left = conns["ip"].get(ip, 1) - 1
+                if left > 0:
+                    conns["ip"][ip] = left
+                else:
+                    conns["ip"].pop(ip, None)
+
+    def _session(self, sock, path, key):
+        sock.settimeout(30)
         accept = base64.b64encode(hashlib.sha1((key + GUID).encode()).digest()).decode()
         sock.sendall(
             (
@@ -172,8 +207,11 @@ class Handler(socketserver.BaseRequestHandler):
         room = clean(query.get("room", ["lobby"])[0], 64) or "lobby"
 
         with lock:
-            members = rooms.setdefault(room, {})
-            full = len(members) >= MAX_ROOM
+            if room not in rooms and len(rooms) >= MAX_ROOMS:
+                full = True
+            else:
+                members = rooms.setdefault(room, {})
+                full = len(members) >= MAX_ROOM
         if full:
             sock.sendall(b"\x88\x02\x03\xf0")  # kapat: oda dolu
             return
