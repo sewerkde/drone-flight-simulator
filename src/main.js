@@ -573,20 +573,25 @@ function fire() {
   if (!net.fire(p, d)) return false;
   arena.lastFire = now;
   lasers.fire(p, d, colorFor(net.id), now);
+  arena.shake = Math.max(arena.shake, 0.22); // hafif geri tepme
   if (settings.sound) zapSound(sound.ctx, settings.volume);
   return true;
 }
 // Başka pilot ateş etti: çizgi + ses; ışın bizim küremize değiyorsa (havada, dokunulmaz değil) sunucuya "vuruldum"
 function onPeerFire(peer, p, d) {
   const now = performance.now();
-  lasers.fire(p, d, colorFor(peer.id), now);
+  const color = colorFor(peer.id);
   const dist = Math.hypot(p[0] - drone.pos.x, p[1] - drone.pos.y, p[2] - drone.pos.z);
   if (settings.sound) zapSound(sound.ctx, settings.volume * Math.min(1, 30 / Math.max(1, dist)));
   // 2 m'den yakından (aynı kalkış pistinde iç içe dururken) isabet sayılmaz
-  if (peer.id === net.id || !drone.airborne || now < arena.shieldUntil || dist < 2) return;
   const radius = hitRadius(VEHICLES[settings.drone]?.scale || 1);
-  if (rayHitsSphere(p, d, [drone.pos.x, drone.pos.y, drone.pos.z], radius, RANGE) < 0) return;
+  const can = peer.id !== net.id && drone.airborne && now >= arena.shieldUntil && dist >= 2;
+  const t = can ? rayHitsSphere(p, d, [drone.pos.x, drone.pos.y, drone.pos.z], radius, RANGE) : -1;
+  if (t < 0) return lasers.fire(p, d, color, now);
+  // ışın bizde biter: mermi gövdemize kadar gelir, isabet noktasında kıvılcım
+  lasers.fire(p, d, color, now, t);
   if (!net.hit(peer.id)) return;
+  lasers.impact([p[0] + d[0] * t, p[1] + d[1] * t, p[2] + d[2] * t], color, now);
   arena.hits++;
   arena.shake = 1;
   const fl = $('hitFlash');
@@ -1577,7 +1582,7 @@ function frame(now) {
   const tSec = now / 1000;
   updateModel(dt, tSec);
   // arena: lazerler, düşüşten sonra otomatik yeniden başlama, dokunulmazlıkta yanıp sönme, sarsıntı sönümü
-  lasers.update(now);
+  lasers.update(now, dt);
   arena.shake *= Math.exp(-dt / 0.12);
   if (arena.respawnAt && now >= arena.respawnAt) {
     arena.respawnAt = 0;
@@ -1647,4 +1652,4 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // test ve hata ayıklama için
-window.sim = { pickDone: () => { steps.vehicle = steps.place = true; refreshStart(); }, get drone() { return drone; }, get model() { return model; }, get peers() { return ghosts.radar(); }, get net() { return net; }, THREE, setCraft: (id) => setDroneId(id), rc, world, settings, camera, renderer, fire, get arena() { return { ...arena, active: arenaActive(), lives: Math.max(0, LIVES - arena.hits), beams: lasers.active.length }; } };
+window.sim = { pickDone: () => { steps.vehicle = steps.place = true; refreshStart(); }, get lasers() { return lasers; }, get drone() { return drone; }, get model() { return model; }, get peers() { return ghosts.radar(); }, get net() { return net; }, THREE, setCraft: (id) => setDroneId(id), rc, world, settings, camera, renderer, fire, get arena() { return { ...arena, active: arenaActive(), lives: Math.max(0, LIVES - arena.hits), beams: lasers.active.length }; } };

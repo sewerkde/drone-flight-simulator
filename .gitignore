@@ -5,3 +5,6 @@ logs/
 __pycache__/
 *.pyc
 node_modules/
+
+# NRW 3B araştırma verisi (büyük indirmeler, depoya girmez)
+research-nrw/
