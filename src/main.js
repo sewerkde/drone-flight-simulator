@@ -91,8 +91,12 @@ renderer.shadowMap.enabled = world.kind === 'village';
 const sound = new MotorSound();
 sound.volume = settings.volume;
 sound.muted = !settings.sound;
-addEventListener('pointerdown', () => sound.unlock());
-addEventListener('keydown', () => sound.unlock());
+// iOS Safari sesi yalnız dokunma bitişinde (touchend/click) açar; 'playback' oturumu sessiz anahtarına rağmen çalar
+try {
+  if (navigator.audioSession) navigator.audioSession.type = 'playback';
+} catch {}
+for (const ev of ['pointerdown', 'touchend', 'click', 'keydown']) addEventListener(ev, () => sound.unlock(), { capture: true, passive: true });
+document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && sound.ctx && sound.unlock());
 
 // ---- araçlar: DJI drone, FPV drone, uçak
 // Yalnız drone'lar (DJI + FPV). Uçaklar 03.10'da listeden çıkarıldı; plane.js ve modelleri geri eklemek için duruyor.

@@ -7,7 +7,7 @@ const DEFAULTS = {
   expo: 0.25,
   invert: { lv: false, lh: false, rv: false, rh: false, wheel: false },
   debug: false,
-  view: 'fpv',
+  view: 'chase', // yeni ziyaretçi drone'u sahnede görerek başlar
   best: null,
   world: 'sat', // sat (uydu 3B, varsayılan) | osm (açık harita, hafif) | google (kendi anahtarınla) | village
   gKey: '',

@@ -36,7 +36,15 @@ export class MotorSound {
       this.ctx = new AC();
       this._build();
     }
-    if (this.ctx.state === 'suspended') this.ctx.resume();
+    if (this.ctx.state !== 'running') this.ctx.resume();
+    // iOS: bir kez kısa sessiz ses çalmak bağlamı tam açar
+    if (!this.primed) {
+      this.primed = true;
+      const b = this.ctx.createBufferSource();
+      b.buffer = this.ctx.createBuffer(1, 1, 22050);
+      b.connect(this.ctx.destination);
+      b.start(0);
+    }
   }
 
   _build() {
