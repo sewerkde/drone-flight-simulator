@@ -233,11 +233,25 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *args):
         pass
 
+    def local_host(self):
+        # DNS rebinding önlemi: yalnız localhost adresiyle gelen istekler (yabancı bir site kendi
+        # alan adını 127.0.0.1'e çözdürüp kumanda verisini / dosyaları okuyamasın)
+        host = self.headers.get("Host", "").split(":")[0].strip("[]").lower()
+        if host in ("localhost", "127.0.0.1", "::1"):
+            return True
+        self.send_error(403)
+        return False
+
     def do_POST(self):
         # Sayfanın durum günlüğü (Google modu). Anahtar gönderilmez; yine de maskelenir.
+        if not self.local_host():
+            return
         if self.path != "/log":
             return self.send_error(404)
-        n = min(int(self.headers.get("Content-Length") or 0), 20000)
+        try:
+            n = max(0, min(int(self.headers.get("Content-Length") or 0), 20000))
+        except ValueError:
+            return self.send_error(400)
         body = self.rfile.read(n).decode("utf-8", "replace")
         body = re.sub(r"key=[^&\s\"]+", "key=***", body)
         os.makedirs("logs", exist_ok=True)
@@ -250,6 +264,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        if not self.local_host():
+            return
         if self.path.split("?")[0] != "/rc":
             return super().do_GET()
         self.send_response(200)
