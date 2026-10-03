@@ -1,8 +1,15 @@
 // Online odalar istemcisi: rooms.py'ye bağlanır, kendi durumunu ~10 Hz gönderir, diğer pilotları tutar.
 // Oda = dünya + yer (aynı yerde uçanlar aynı koordinat sistemini paylaşır).
+// Diğer pilotlardan gelen her şey güvenilmezdir: biçimi bozuk kayıt sessizce düşer (çizim döngüsünü kilitlememeli).
+
+const num = (v, lim) => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= lim;
+const vec = (a, n, lim) => Array.isArray(a) && a.length === n && a.every((v) => num(v, lim));
+const STATES = new Set(['off', 'ground', 'flying', 'landing', 'rth', 'crashed']);
+const MAX_PEERS = 60;
 
 export class NetClient {
-  constructor({ url, room, name, vehicle }) {
+  constructor({ url, room, name, vehicle, isVehicle = () => true }) {
+    this.isVehicle = (v) => typeof v === 'string' && v.length <= 24 && isVehicle(v);
     this.url = url;
     this.room = room;
     this.name = name;
@@ -52,11 +59,13 @@ export class NetClient {
   }
 
   _msg(m) {
+    if (!m || typeof m !== 'object') return;
     if (m.t === 'welcome') {
       this.id = m.id;
-      m.peers.forEach((p) => this._add(p));
+      if (Array.isArray(m.peers)) m.peers.slice(0, MAX_PEERS).forEach((p) => this._add(p));
     } else if (m.t === 'join') {
-      this.onJoin?.(this._add(m));
+      const p = this._add(m);
+      if (p) this.onJoin?.(p);
     } else if (m.t === 'bye') {
       const p = this.peers.get(m.id);
       if (p) {
@@ -64,22 +73,30 @@ export class NetClient {
         this.onLeave?.(p);
       }
     } else if (m.t === 's') {
+      if (!vec(m.p, 3, 1e6) || !vec(m.q, 4, 1.5)) return;
       const p = this.peers.get(m.id) || this._add({ id: m.id, name: 'Pilot', vehicle: m.v });
-      if (m.v && m.v !== p.vehicle) {
+      if (!p) return;
+      const now = performance.now();
+      // araç değişimi: yalnız bilinen araçlar, en çok 2 sn'de bir (sürekli model yeniden kurdurulamaz)
+      if (this.isVehicle(m.v) && m.v !== p.vehicle && now - (p.vehT || 0) > 2000) {
         p.vehicle = m.v;
+        p.vehT = now;
         p.changed = true;
       }
-      p.buf.push({ t: performance.now(), p: m.p, q: m.q, pr: m.pr || 0, st: m.s });
+      const pr = num(m.pr, 1e3) ? Math.min(1, Math.max(0, m.pr)) : 0;
+      p.buf.push({ t: now, p: m.p, q: m.q, pr, st: STATES.has(m.s) ? m.s : 'flying' });
       if (p.buf.length > 20) p.buf.shift();
       p.seen = performance.now();
     }
   }
 
   _add(info) {
+    if (!info || !Number.isInteger(info.id) || info.id === this.id) return null;
+    if (!this.peers.has(info.id) && this.peers.size >= MAX_PEERS) return null;
     const p = {
       id: info.id,
-      name: info.name || 'Pilot',
-      vehicle: info.vehicle || '',
+      name: typeof info.name === 'string' && info.name.trim() ? info.name.slice(0, 20) : 'Pilot',
+      vehicle: this.isVehicle(info.vehicle) ? info.vehicle : '',
       buf: [],
       seen: performance.now(),
       changed: true,

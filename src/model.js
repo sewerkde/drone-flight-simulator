@@ -398,7 +398,7 @@ export async function loadDroneModels() {
 }
 
 export function hasGlbDrone(id) {
-  return !!glbCache[id];
+  return Object.hasOwn(glbCache, id) && !!glbCache[id];
 }
 
 // Çalışma zamanı yapısı buildDroneModel ile aynı: root (konum+yön), body (eğim), gimbal, props, ledBack

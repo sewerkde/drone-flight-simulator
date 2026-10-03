@@ -15,6 +15,7 @@ Mesajlar JSON:
 Düz HTTP: GET /rooms → {"rooms":[{"room","count","pilots":[{name,vehicle}]}],"total"} (lobi listesi)
 """
 import base64
+import math
 import hashlib
 import json
 import socketserver
@@ -30,7 +31,17 @@ BIND = sys.argv[2] if len(sys.argv) > 2 else "127.0.0.1"
 GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 MAX_ROOM = 40  # odada en fazla pilot
 MAX_MSG = 4096  # bayt
-MAX_RATE = 40  # saniyede en fazla mesaj (fazlası düşer)
+MAX_RATE = 20  # saniyede en fazla mesaj (istemci ~10 Hz yollar; fazlası düşer)
+STATES = {"off", "ground", "flying", "landing", "rth", "crashed"}
+
+
+def num_list(v, n, lim):
+    # n elemanlı, sonlu, |x| <= lim sayı listesi (bool hariç)
+    return (
+        isinstance(v, list)
+        and len(v) == n
+        and all(isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) and abs(x) <= lim for x in v)
+    )
 MAX_LIST = 12  # /rooms: odada listelenen en fazla pilot
 MAX_ROOMS_LIST = 200  # /rooms: en fazla oda
 # kötüye kullanım sınırları (yayında ortam değişkeniyle ayarlanır)
@@ -241,6 +252,8 @@ class Handler(socketserver.BaseRequestHandler):
                     msg = json.loads(data)
                 except ValueError:
                     continue
+                if not isinstance(msg, dict):
+                    continue
                 if msg.get("t") == "hello":
                     me.name = clean(msg.get("name", ""), 20) or "Pilot"
                     me.vehicle = clean(msg.get("vehicle", ""), 24)
@@ -253,10 +266,17 @@ class Handler(socketserver.BaseRequestHandler):
                     me.send({"t": "welcome", "id": me.id, "peers": peers})
                     broadcast(room, {"t": "join", "id": me.id, "name": me.name, "vehicle": me.vehicle}, skip=me)
                 elif msg.get("t") == "s":
-                    msg["id"] = me.id
-                    if "vehicle" in msg:
-                        me.vehicle = clean(msg["vehicle"], 24)
-                    broadcast(room, msg, skip=me)
+                    # gelen durum olduğu gibi aktarılmaz: doğrulanır, yalnız izinli alanlar yeniden kurulur
+                    p, q = msg.get("p"), msg.get("q")
+                    if not (num_list(p, 3, 1e6) and num_list(q, 4, 1.5)):
+                        continue
+                    pr = msg.get("pr", 0)
+                    pr = pr if isinstance(pr, (int, float)) and not isinstance(pr, bool) and math.isfinite(pr) else 0
+                    out = {"t": "s", "id": me.id, "p": p, "q": q, "pr": round(min(1, max(0, pr)), 2),
+                           "s": msg.get("s") if msg.get("s") in STATES else "flying"}
+                    if isinstance(msg.get("v"), str):
+                        out["v"] = me.vehicle = clean(msg["v"], 24)
+                    broadcast(room, out, skip=me)
         except (ConnectionError, OSError, ValueError):
             pass
         finally:

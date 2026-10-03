@@ -78,6 +78,7 @@ spec:
     metadata:
       labels: { app: drone }
     spec:
+      automountServiceAccountToken: false # kubernetes API'ye ihtiyaç yok
       securityContext:
         runAsNonRoot: true
         runAsUser: 10101

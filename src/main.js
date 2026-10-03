@@ -135,7 +135,8 @@ function setCraft(id) {
 
 // Araç modeli (kendi aracımız ve online odadaki diğer pilotlar için)
 function buildModelFor(id) {
-  const v = VEHICLES[id] || VEHICLES.mini5;
+  if (!Object.hasOwn(VEHICLES, id)) id = 'mini5'; // ağdan gelen kimlik: yalnız bilinen araçlar
+  const v = VEHICLES[id];
   const m =
     v.type === 'plane'
       ? buildPlaneModel(v.model, v.gear)
@@ -785,7 +786,7 @@ function setOnline(on) {
     return;
   }
   if (net) return;
-  net = new NetClient({ url: ROOMS_URL, room: roomName(), name: pilotName(), vehicle: settings.drone });
+  net = new NetClient({ url: ROOMS_URL, room: roomName(), name: pilotName(), vehicle: settings.drone, isVehicle: (v) => Object.hasOwn(VEHICLES, v) });
   net.onJoin = (p) => hud.toast(t('toast.joined', { name: p.name }), 'info', 3);
   net.onLeave = (p) => hud.toast(t('toast.left', { name: p.name }), 'info', 3);
 }
@@ -1460,7 +1461,12 @@ function frame(now) {
   const tSec = now / 1000;
   updateModel(dt, tSec);
   sendOnline();
-  ghosts.update(net, now, dt);
+  // diğer pilotlarla ilgili bir hata kendi uçuşumuzu ve çizimi asla durdurmasın
+  try {
+    ghosts.update(net, now, dt);
+  } catch (e) {
+    console.warn('[ghosts]', e);
+  }
   {
     const ob = $('onlineBox');
     ob.classList.toggle('hidden', !net);
