@@ -3,7 +3,7 @@
 // DOM ve CSS bu modülde üretilir; style.css'e dokunulmaz. Pointer Events ile çoklu dokunuş.
 
 const TRAVEL = 44; // px, çubuğun tam sapması
-const LABELS = { takeoff: 'Takeoff', land: 'Land', rth: 'RTH', view: 'View' };
+const LABELS = { takeoff: 'Takeoff', land: 'Land', rth: 'RTH', view: 'View', fire: 'Fire' };
 
 // Dokunmatik arayüz gösterilsin mi? Masaüstünde (fare/trackpad birincil işaretçi) hayır.
 export function shouldShowTouch({ maxTouchPoints = 0, coarse = false, force = false } = {}) {
@@ -49,6 +49,12 @@ const CSS = `
   border:1px solid rgba(255,255,255,.22);background:rgba(14,16,20,.62);color:inherit;font:inherit;letter-spacing:.02em;cursor:pointer}
 .djt-btns button.on{background:#2f8cff;border-color:#2f8cff}
 @media (max-aspect-ratio:1/1){.djt-btns{bottom:calc(max(6px,env(safe-area-inset-bottom)) + 214px)}}
+.djt-fire{position:absolute;right:max(10px,env(safe-area-inset-right));bottom:calc(max(6px,env(safe-area-inset-bottom)) + 204px);
+  width:66px;height:66px;margin:0;padding:0;border-radius:50%;pointer-events:auto;touch-action:none;
+  border:2px solid rgba(255,75,62,.8);background:rgba(14,16,20,.62);color:inherit;font:inherit;font-size:12px;letter-spacing:.04em;cursor:pointer}
+.djt-fire.on{background:rgba(255,75,62,.85);border-color:#ff4b3e}
+.djt-fire[hidden]{display:none}
+@media (max-aspect-ratio:1/1){.djt-fire{bottom:calc(max(6px,env(safe-area-inset-bottom)) + 268px)}}
 `;
 
 export class TouchSource {
@@ -58,11 +64,12 @@ export class TouchSource {
   constructor(opts = {}) {
     this.opts = opts;
     this.sticks = { lh: 0, lv: 0, rh: 0, rv: 0, wheel: 0 };
-    this.buttons = { takeoff: false, land: false, rth: false, view: false };
+    this.buttons = { takeoff: false, land: false, rth: false, view: false, fire: false };
     this.rawButtons = null;
     this.onButton = null; // (ad) => void, basıldığı an bir kez
     this.enabled = shouldShowTouch({ ...touchEnv(), force: !!opts.force });
     this.visible = false;
+    this.fireOn = false; // lazer arena: ekranda ateş düğmesi
     this.root = null;
     this._labels = { ...LABELS, ...(opts.labels || {}) };
     this._release = [];
@@ -95,6 +102,15 @@ export class TouchSource {
     this.root?.querySelectorAll('[data-djt]').forEach((b) => (b.textContent = this._labels[b.dataset.djt]));
   }
 
+  // Ateş düğmesi yalnız lazer arenada görünür (serbest uçuşta yok)
+  setFire(on) {
+    on = !!on;
+    if (on === this.fireOn) return;
+    this.fireOn = on;
+    const b = this.root?.querySelector('.djt-fire');
+    if (b) b.hidden = !on;
+  }
+
   destroy() {
     this._releaseAll();
     this.root?.remove();
@@ -122,6 +138,10 @@ export class TouchSource {
     row.className = 'djt-btns';
     for (const name of ['takeoff', 'land', 'rth', 'view']) row.append(this._button(name));
     root.append(row);
+    const fire = this._button('fire');
+    fire.className = 'djt-fire';
+    fire.hidden = !this.fireOn;
+    root.append(fire);
 
     const before = document.querySelector(this.opts.before ?? '#start');
     if (before) before.before(root);

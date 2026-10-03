@@ -9,8 +9,14 @@ WebSocket (RFC 6455), yalnız Python standart kütüphanesi. Sunucu durum tutmaz
 Mesajlar JSON:
     istemci → {"t":"hello","name":..,"vehicle":..}      bağlanınca bir kez
     istemci → {"t":"s", ...durum}                        ~10 Hz
-    sunucu  → {"t":"welcome","id":..,"peers":[{id,name,vehicle}]}
-    sunucu  → {"t":"join","id":..,"name":..,"vehicle":..} / {"t":"s","id":..,...} / {"t":"bye","id":..}
+    sunucu  → {"t":"welcome","id":..,"peers":[{id,name,vehicle,k,d}]}
+    sunucu  → {"t":"join","id":..,"name":..,"vehicle":..,"k":0,"d":0} / {"t":"s","id":..,...} / {"t":"bye","id":..}
+
+Lazer arena (yalnız adı ":arena" ile biten odalarda; başka odada düşer):
+    istemci → {"t":"f","p":[x,y,z],"d":[dx,dy,dz]}        ateş; en fazla 5/sn
+    sunucu  → {"t":"f","id":..,"p":..,"d":..}             gönderen hariç herkese
+    istemci → {"t":"h","by":<id>}                         "vuruldum" (vurulan bildirir; kimse "vurdum" diyemez); en fazla 3/sn
+    sunucu  → {"t":"h","id":<vurulan>,"by":<vuran>,"k":vuran.kills,"d":vurulan.deaths}   gönderen dahil herkese
 
 Düz HTTP: GET /rooms → {"rooms":[{"room","count","pilots":[{name,vehicle}]}],"total"} (lobi listesi)
 """
@@ -32,6 +38,9 @@ GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 MAX_ROOM = 40  # odada en fazla pilot
 MAX_MSG = 4096  # bayt
 MAX_RATE = 20  # saniyede en fazla mesaj (istemci ~10 Hz yollar; fazlası düşer)
+MAX_FIRE = 5  # arena: saniyede en fazla ateş (ayrı sayaç)
+MAX_HIT = 3  # arena: saniyede en fazla "vuruldum"
+ARENA_SUFFIX = ":arena"  # lazer arena odaları bu ekle biter
 STATES = {"off", "ground", "flying", "landing", "rth", "crashed"}
 
 
@@ -65,6 +74,8 @@ class Client:
         self.wlock = threading.Lock()
         self.name = "Pilot"
         self.vehicle = ""
+        self.kills = 0  # arena skoru (sunucu tutar, istemciye güvenilmez)
+        self.deaths = 0
         with lock:
             self.id = next_id[0]
             next_id[0] += 1
@@ -229,8 +240,10 @@ class Handler(socketserver.BaseRequestHandler):
         me = Client(sock, room)
         with lock:
             rooms[room][me.id] = me
+        arena = room.endswith(ARENA_SUFFIX)
         sent = 0
         window = time.time()
+        fired = hits = 0  # arena sayaçları (aynı 1 sn penceresi)
         try:
             while True:
                 opcode, data = read_frame(sock)
@@ -244,7 +257,7 @@ class Handler(socketserver.BaseRequestHandler):
                     continue
                 now = time.time()
                 if now - window > 1:
-                    window, sent = now, 0
+                    window, sent, fired, hits = now, 0, 0, 0
                 sent += 1
                 if sent > MAX_RATE:
                     continue
@@ -259,12 +272,16 @@ class Handler(socketserver.BaseRequestHandler):
                     me.vehicle = clean(msg.get("vehicle", ""), 24)
                     with lock:
                         peers = [
-                            {"id": c.id, "name": c.name, "vehicle": c.vehicle}
+                            {"id": c.id, "name": c.name, "vehicle": c.vehicle, "k": c.kills, "d": c.deaths}
                             for c in rooms[room].values()
                             if c is not me
                         ]
                     me.send({"t": "welcome", "id": me.id, "peers": peers})
-                    broadcast(room, {"t": "join", "id": me.id, "name": me.name, "vehicle": me.vehicle}, skip=me)
+                    broadcast(
+                        room,
+                        {"t": "join", "id": me.id, "name": me.name, "vehicle": me.vehicle, "k": me.kills, "d": me.deaths},
+                        skip=me,
+                    )
                 elif msg.get("t") == "s":
                     # gelen durum olduğu gibi aktarılmaz: doğrulanır, yalnız izinli alanlar yeniden kurulur
                     p, q = msg.get("p"), msg.get("q")
@@ -277,6 +294,35 @@ class Handler(socketserver.BaseRequestHandler):
                     if isinstance(msg.get("v"), str):
                         out["v"] = me.vehicle = clean(msg["v"], 24)
                     broadcast(room, out, skip=me)
+                elif msg.get("t") == "f":
+                    # ateş: yalnız arenada, ayrı hız sınırı; konum + yön doğrulanıp yeniden kurulur
+                    if not arena:
+                        continue
+                    fired += 1
+                    if fired > MAX_FIRE:
+                        continue
+                    p, d = msg.get("p"), msg.get("d")
+                    if not (num_list(p, 3, 1e6) and num_list(d, 3, 1.5)):
+                        continue
+                    broadcast(room, {"t": "f", "id": me.id, "p": p, "d": d}, skip=me)
+                elif msg.get("t") == "h":
+                    # "vuruldum": vurulan bildirir, vuran odadaki başka bir istemci olmalı; skor sunucuda
+                    if not arena:
+                        continue
+                    hits += 1
+                    if hits > MAX_HIT:
+                        continue
+                    by = msg.get("by")
+                    if not isinstance(by, int) or isinstance(by, bool) or by == me.id:
+                        continue
+                    with lock:
+                        shooter = rooms.get(room, {}).get(by)
+                        if shooter is None:
+                            continue
+                        me.deaths += 1
+                        shooter.kills += 1
+                        k, dd = shooter.kills, me.deaths
+                    broadcast(room, {"t": "h", "id": me.id, "by": by, "k": k, "d": dd})
         except (ConnectionError, OSError, ValueError):
             pass
         finally:

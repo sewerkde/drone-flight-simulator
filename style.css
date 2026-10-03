@@ -233,6 +233,31 @@ kbd {
 
 .flash { position: absolute; inset: 0; background: #fff; opacity: 0; transition: opacity 0.35s; }
 .flash.on { opacity: 0.7; transition: none; }
+/* lazer arena: vurulunca kırmızı kenar parlaması */
+.hit-flash { position: absolute; inset: 0; box-shadow: inset 0 0 90px 20px rgba(255, 75, 62, 0.75); opacity: 0; transition: opacity 0.45s; }
+.hit-flash.on { opacity: 1; transition: none; }
+
+/* lazer arena skor paneli (sol üst, yer adının altında): can kutuları + pilot satırları */
+.arena {
+  position: absolute; top: 92px; left: 14px; min-width: 168px;
+  background: var(--glass-strong); border: 1px solid var(--line); border-radius: 12px;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  padding: 8px 10px; font-size: 12px;
+}
+.arena-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--muted); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; font-size: 11px; }
+.arena-lives { display: flex; gap: 4px; }
+.arena-lives i { width: 14px; height: 8px; border-radius: 2px; background: var(--ok); box-shadow: 0 0 6px rgba(60, 207, 110, 0.6); }
+.arena-lives i.off { background: rgba(255, 255, 255, 0.14); box-shadow: none; }
+.arena-rows { list-style: none; margin: 2px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.arena-rows li { display: grid; grid-template-columns: 8px 1fr 5ch 7ch; align-items: center; gap: 8px; padding: 2px 4px; border-radius: 5px; }
+.arena-rows li.me { background: rgba(47, 140, 255, 0.18); }
+.arena-rows i { width: 8px; height: 8px; border-radius: 50%; }
+.arena-rows span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.arena-rows b, .arena-rows em { font: 600 12px var(--mono); text-align: right; }
+.arena-rows em { color: var(--muted); }
+.arena-cols { display: grid; grid-template-columns: 1fr 5ch 7ch; gap: 8px; margin-top: 6px; padding: 0 4px; font-size: 10px; color: var(--muted); text-align: right; }
+.arena-cols span { white-space: nowrap; overflow: hidden; }
+.arena-cols span:first-child { grid-column: 2; }
 
 .crash {
   position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%);
@@ -410,6 +435,10 @@ kbd {
 .seg { display: inline-flex; padding: 3px; border-radius: 10px; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); }
 .seg button { border: 0; background: transparent; padding: 6px 12px; border-radius: 7px; color: var(--muted); }
 .seg button.on { background: var(--accent); color: #fff; }
+/* online sekmesi: mod seçici (serbest uçuş / lazer arena) */
+.mode-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; color: var(--muted); font-size: 13px; }
+.mode-row small { flex-basis: 100%; font-size: 12px; color: var(--muted); }
+.mode-row small.hidden { display: none; }
 
 /* dünya seçimi: üç kutucuk */
 .world-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
@@ -584,6 +613,7 @@ body.prestart #hud > *:not(#credits) { visibility: hidden; }
 body.touch-ui .rc-panel, body.touch-ui .actions { display: none; }
 body.touch-ui .map { top: 84px; bottom: auto; width: 96px; height: 96px; }
 body.touch-ui .state span, body.touch-ui .gimbal { display: none; }
+body.touch-ui .arena { left: auto; right: 10px; top: 84px; min-width: 150px; }
 
 .world-note { margin: 10px 0 0; }
 
@@ -682,6 +712,7 @@ body.prestart .djt { visibility: hidden; }
   .telemetry b { font-size: 15px; min-width: 0; }
   .telemetry span, .telemetry em { font-size: 10px; }
   .map { width: 110px; height: 110px; left: 10px; bottom: 10px; }
+  .arena { top: 80px; left: 10px; min-width: 140px; padding: 6px 8px; font-size: 11px; }
   .panel { left: 8px; right: 8px; width: auto; top: 48px; max-height: calc(100dvh - 60px); }
   .loading { padding: 0 12px 12px; }
   .ld-card { padding: 16px; }

@@ -1,7 +1,7 @@
 // Başlangıç ekranı lobisi: şu an online uçan pilotlar (rooms.py GET /rooms) + küçük dünya haritası.
 // Gizlilik: yalnız hazır yerlerle eşleşen odaların konumu gösterilir; diğerleri "özel konum" olarak sayılır.
 import { PLACES, placeLabel } from './world-google.js';
-import { lang } from './i18n.js';
+import { lang, t } from './i18n.js';
 
 const POLL_MS = 5000;
 const TIMEOUT_MS = 4000;
@@ -73,12 +73,15 @@ const tx = () => TEXT[lang()] || TEXT.en;
 // oda anahtarı → hazır yer ("51.6323,7.5370")
 const PRESET = new Map(PLACES.map((p) => [`${p.lat.toFixed(4)},${p.lon.toFixed(4)}`, p]));
 
+// ':arena' eki lazer arena odası (aynı yer, ayrı oda)
 function classify(room) {
-  if (room === 'village') return { type: 'village', world: 'village', place: null };
+  const arena = room.endsWith(':arena');
+  if (arena) room = room.slice(0, -':arena'.length);
+  if (room === 'village') return { type: 'village', world: 'village', place: null, arena };
   const m = /^(osm|sat|google):(.+)$/.exec(room);
   const place = m && PRESET.get(m[2]);
-  if (place) return { type: 'preset', world: m[1], place };
-  return { type: 'custom', world: m ? m[1] : null, place: null };
+  if (place) return { type: 'preset', world: m[1], place, arena };
+  return { type: 'custom', world: m ? m[1] : null, place: null, arena };
 }
 
 // ws://host:8766 → http://host:8766/rooms
@@ -388,7 +391,8 @@ export function createLobby({ el, roomsUrl, onJoin, onUpdate }) {
     tip.textContent = '';
     for (const row of c.rows) {
       const line = h('div', 'lb-tip-row');
-      line.append(h('b', null, placeLabel(row.place)), h('span', null, `${T[row.world]} · ${T.pilots(row.count)}`));
+      const tag = row.arena ? `${t('modeArena')} · ` : '';
+      line.append(h('b', null, placeLabel(row.place)), h('span', null, `${tag}${T[row.world]} · ${T.pilots(row.count)}`));
       tip.append(line);
     }
     tip.hidden = false;
@@ -450,7 +454,7 @@ export function createLobby({ el, roomsUrl, onJoin, onUpdate }) {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
           const r = li._row;
-          onJoin?.({ world: r.world, place: r.type === 'preset' ? r.place : null });
+          onJoin?.({ world: r.world, place: r.type === 'preset' ? r.place : null, arena: !!r.arena });
         });
         li.append(btn);
       }
@@ -470,7 +474,7 @@ export function createLobby({ el, roomsUrl, onJoin, onUpdate }) {
     }
     li._row = row;
     const T = tx();
-    li.className = `lb-row is-${row.type}`;
+    li.className = `lb-row is-${row.type}${row.arena ? ' is-arena' : ''}`;
     li.classList.toggle('is-hot', !!hot && clusterOf.get(row.key)?.id === hot);
     const place = row.type === 'preset' ? placeLabel(row.place) : T[row.type];
     const names = row.pilots.slice(0, MAX_NAMES).join(', ');
@@ -478,7 +482,8 @@ export function createLobby({ el, roomsUrl, onJoin, onUpdate }) {
     const who = names + (extra > 0 ? ` +${extra}` : '');
     li.querySelector('.lb-place').textContent = place;
     const meta = li.querySelector('.lb-meta');
-    meta.textContent = row.type === 'preset' ? `${T[row.world]} · ${who}` : who;
+    const tags = [row.arena ? t('modeArena') : '', row.type === 'preset' ? T[row.world] : ''].filter(Boolean);
+    meta.textContent = [...tags, who].filter(Boolean).join(' · ');
     meta.title = row.pilots.join(', ');
     const cnt = li.querySelector('.lb-count');
     cnt.textContent = String(row.count);

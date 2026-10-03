@@ -12,7 +12,7 @@ import { TouchSource } from './touch.js';
 
 export const SOURCES = ['bridge', 'serial', 'gamepad', 'touch'];
 // Bugünkü DJI adları + yeni kaynakların adları
-export const BUTTON_NAMES = ['photo', 'rth', 'camera', 'fn', 'takeoff', 'land', 'view', 'modeUp', 'modeDown'];
+export const BUTTON_NAMES = ['photo', 'rth', 'camera', 'fn', 'takeoff', 'land', 'view', 'modeUp', 'modeDown', 'fire'];
 const SOURCE_NAMES = { bridge: 'DJI RC (serve.py)', serial: 'DJI RC (USB)', touch: 'Touch', none: '' };
 
 const blankButtons = () => Object.fromEntries(BUTTON_NAMES.map((n) => [n, false]));

@@ -40,7 +40,38 @@ export class Hud {
     this.tt = setTimeout(() => t.classList.remove('show'), secs * 1000);
   }
 
-  update({ d, rc, inp, opt, viewName, placeName, fps, recSecs, pilot, home, peers = [] }) {
+  // Lazer arena skor paneli: üstte kalan can (3 kutu), altta pilotlar (renk noktası · ad · isabet · vuruluş)
+  arena(a) {
+    const box = $('arena');
+    box.classList.toggle('hidden', !a);
+    if (!a) {
+      this.arenaSig = null;
+      return;
+    }
+    $('arenaLives').querySelectorAll('i').forEach((el, i) => el.classList.toggle('off', i >= a.lives));
+    const sig = a.rows.map((r) => `${r.id}:${r.name}:${r.k}:${r.d}`).join('|');
+    if (sig === this.arenaSig) return;
+    this.arenaSig = sig;
+    const list = $('arenaRows');
+    list.replaceChildren();
+    for (const r of a.rows) {
+      const li = document.createElement('li');
+      if (r.me) li.className = 'me';
+      const dot = document.createElement('i');
+      dot.style.background = r.color;
+      const name = document.createElement('span');
+      name.textContent = r.name;
+      const k = document.createElement('b');
+      k.textContent = r.k;
+      const d = document.createElement('em');
+      d.textContent = r.d;
+      li.append(dot, name, k, d);
+      list.append(li);
+    }
+  }
+
+  update({ d, rc, inp, opt, viewName, placeName, fps, recSecs, pilot, home, peers = [], arena = null }) {
+    this.arena(arena);
     if (d.state !== this.lastState) {
       this.lastState = d.state;
       let [title, hint, cls] = STATE[d.state];

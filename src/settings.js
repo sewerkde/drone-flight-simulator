@@ -20,6 +20,7 @@ const DEFAULTS = {
   volume: 0.6,
   lang: 'en', // en | tr | de (arayüz dili, varsayılan İngilizce)
   online: true, // online oda (rooms.py)
+  arena: false, // online mod: false = serbest uçuş, true = lazer arena (oda adı ':arena' ile biter)
   pilotName: '',
   rcPanel: false, // uçuş ekranında kumanda paneli açık mı
   // kumanda ayarı (rc-setup.js). Eksen başına ölü bölge, expo (null = genel expo), hassasiyet çarpanı
@@ -71,6 +72,8 @@ function load() {
       axes: merge2(DEFAULTS.axes, s.axes),
       modeMul: merge2(DEFAULTS.modeMul, s.modeMul),
       rcCal: { ...(s.rcCal || {}) },
+      // Lazer arena açılışta HER ZAMAN kapalı (kayıtlı değer okunmaz): yalnız Online sekmesinde bilerek seçilince açılır
+      arena: false,
     };
   } catch {
     return structuredClone(DEFAULTS);

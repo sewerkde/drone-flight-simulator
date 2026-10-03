@@ -13,7 +13,8 @@ import { settings, save } from './settings.js';
 import { MotorSound } from './sound.js';
 import { t, applyStatic, lang } from './i18n.js';
 import { NetClient } from './net.js';
-import { Ghosts } from './ghosts.js';
+import { Ghosts, colorFor } from './ghosts.js';
+import { Lasers, rayHitsSphere, hitRadius, zapSound, hitSound, RANGE, LIVES, FIRE_MS, RESPAWN_MS, SHIELD_MS } from './arena.js';
 import { createLobby } from './lobby.js';
 import { createRcSetup } from './rc-setup.js';
 
@@ -233,7 +234,7 @@ const rc = createControllers({
   // yerel USB köprüsü (serve.py) yalnız localhost'ta; yayında Web Serial / gamepad / klavye
   bridge: document.querySelector('meta[name="rc-bridge"]')?.content !== 'off' && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname),
   gamepad: { preset: settings.gamepadPreset },
-  touch: { labels: { takeoff: t('takeoff'), land: t('land'), rth: t('rth'), view: t('viewBtn') } },
+  touch: { labels: { takeoff: t('takeoff'), land: t('land'), rth: t('rth'), view: t('viewBtn'), fire: t('arena.fire') } },
 });
 const srcLabel = () =>
   ({ bridge: 'DJI RC-N3', serial: 'DJI RC-N3 (USB)', touch: t('srcTouch') })[rc.source] || rc.sourceName;
@@ -490,6 +491,14 @@ function updateCamera(dt) {
       if (e < 0.85) camera.layers.enable(1);
     }
   }
+  // arena: vurulunca kısa sarsıntı (konum titremesi + hafif yatış)
+  if (arena.shake > 0.01) {
+    const s = arena.shake * (vSpec.scale || 1);
+    camera.position.x += (Math.random() - 0.5) * 0.12 * s;
+    camera.position.y += (Math.random() - 0.5) * 0.12 * s;
+    camera.position.z += (Math.random() - 0.5) * 0.12 * s;
+    camera.rotateZ((Math.random() - 0.5) * 0.05 * arena.shake);
+  }
   camera.updateProjectionMatrix();
 }
 
@@ -533,6 +542,77 @@ function reset() {
   chasePos.set(0, 0.42, 1.0);
   chaseDir.set(-Math.sin(drone.yaw), 0, -Math.cos(drone.yaw));
   hud.toast(t('toast.restarted'));
+  arenaRespawn();
+}
+
+// ---- lazer arena (yalnız settings.arena açık ve odaya bağlıyken; serbest uçuşta hiçbir şey değişmez)
+const lasers = new Lasers(scene);
+const arena = { hits: 0, shieldUntil: 0, respawnAt: 0, lastFire: 0, shake: 0 };
+const arenaActive = () => !!net && settings.arena;
+const _aim = new THREE.Vector3();
+const _aq = new THREE.Quaternion();
+const _ax = new THREE.Vector3(1, 0, 0);
+// Bakış yönü: DJI drone'da yön + gimbal eğimi; FPV'de gövde quat'ı + kamera eğimi (updateCamera ile aynı)
+function aimDir(out) {
+  const d = drone;
+  if (d.kind === 'fpv' && d.quat) {
+    _aq.setFromAxisAngle(_ax, (d.camPitch ?? d.gimbal) * DEG);
+    return out.set(0, 0, -1).applyQuaternion(_aq).applyQuaternion(d.quat).normalize();
+  }
+  const g = d.gimbal * DEG;
+  return out.set(-Math.sin(d.yaw) * Math.cos(g), Math.sin(g), -Math.cos(d.yaw) * Math.cos(g));
+}
+// Ateş: yalnız havadayken; 250 ms yerel aralık. Gönderildiyse kendi çizgimiz + ses; true döner.
+function fire() {
+  const now = performance.now();
+  if (!arenaActive() || !drone.airborne || now - arena.lastFire < FIRE_MS) return false;
+  const r = (x, n) => Math.round(x * n) / n;
+  const dir = aimDir(_aim);
+  const p = [r(drone.pos.x, 100), r(drone.pos.y, 100), r(drone.pos.z, 100)];
+  const d = [r(dir.x, 1e4), r(dir.y, 1e4), r(dir.z, 1e4)];
+  if (!net.fire(p, d)) return false;
+  arena.lastFire = now;
+  lasers.fire(p, d, colorFor(net.id), now);
+  if (settings.sound) zapSound(sound.ctx, settings.volume);
+  return true;
+}
+// Başka pilot ateş etti: çizgi + ses; ışın bizim küremize değiyorsa (havada, dokunulmaz değil) sunucuya "vuruldum"
+function onPeerFire(peer, p, d) {
+  const now = performance.now();
+  lasers.fire(p, d, colorFor(peer.id), now);
+  const dist = Math.hypot(p[0] - drone.pos.x, p[1] - drone.pos.y, p[2] - drone.pos.z);
+  if (settings.sound) zapSound(sound.ctx, settings.volume * Math.min(1, 30 / Math.max(1, dist)));
+  // 2 m'den yakından (aynı kalkış pistinde iç içe dururken) isabet sayılmaz
+  if (peer.id === net.id || !drone.airborne || now < arena.shieldUntil || dist < 2) return;
+  const radius = hitRadius(VEHICLES[settings.drone]?.scale || 1);
+  if (rayHitsSphere(p, d, [drone.pos.x, drone.pos.y, drone.pos.z], radius, RANGE) < 0) return;
+  if (!net.hit(peer.id)) return;
+  arena.hits++;
+  arena.shake = 1;
+  const fl = $('hitFlash');
+  fl.classList.add('on');
+  requestAnimationFrame(() => requestAnimationFrame(() => fl.classList.remove('on')));
+  if (settings.sound) hitSound(sound.ctx, settings.volume);
+  if (arena.hits >= LIVES) {
+    drone._crash('crash.laser');
+    arena.respawnAt = now + RESPAWN_MS;
+  }
+}
+// Yeniden başlayınca: sayaç sıfır, kısa dokunulmazlık (serbest uçuşta etkisiz)
+function arenaRespawn() {
+  arena.hits = 0;
+  arena.respawnAt = 0;
+  arena.shieldUntil = arenaActive() ? performance.now() + SHIELD_MS : 0;
+}
+// Skor satırları: isabete göre sıralı, en çok 8, ben hep listede
+function arenaRows() {
+  const me = { id: net.id, name: pilotName(), k: net.me.k, d: net.me.d, me: true };
+  const rows = [me, ...[...net.peers.values()].map((p) => ({ id: p.id, name: p.name, k: p.k, d: p.d, me: false }))];
+  rows.sort((a, b) => b.k - a.k || a.d - b.d || a.id - b.id);
+  const top = rows.slice(0, 8);
+  if (!top.includes(me)) top[top.length - 1] = me;
+  for (const r of top) r.color = colorFor(r.id);
+  return top;
 }
 
 let photoPending = false;
@@ -584,6 +664,7 @@ const ACTIONS = {
   Digit2: () => setMode('N'),
   Digit3: () => setMode('S'),
   KeyP: () => (photoPending = true),
+  Space: fire, // yalnız lazer arenada; serbest uçuşta etkisiz
   KeyK: toggleVideo,
   KeyM: () => {
     settings.sound = !settings.sound;
@@ -607,8 +688,10 @@ const ACTIONS = {
     homePad.visible = !on;
   },
 };
-input.onAction = (code) => {
-  if ($('start').classList.contains('hidden')) ACTIONS[code]?.();
+input.onAction = (code, e) => {
+  if (!$('start').classList.contains('hidden')) return;
+  if (code === 'Space' && arenaActive()) e?.preventDefault(); // odaklı HUD düğmesi tetiklenmesin
+  ACTIONS[code]?.();
 };
 
 // Kumanda test ve ayar ekranı (Ayarlar > Kumanda, başlangıç ekranındaki kumanda rozeti, uçuştaki kumanda paneli)
@@ -630,11 +713,13 @@ rc.onButton = (b) => {
   if (!started || rcSetup.isOpen) return;
   if (b === 'fn') drone.state === 'crashed' ? reset() : cycleView();
   else if (b === 'rth') drone.state === 'crashed' ? reset() : drone.toggleRth();
-  else if (b === 'photo') photoPending = true;
+  else if (b === 'photo') arenaActive() ? fire() : (photoPending = true); // kumandada fotoğraf tuşu arenada ateş
+  else if (b === 'fire') fire(); // dokunmatik ateş düğmesi
   else if (b === 'camera') toggleVideo();
   else if (b === 'takeoff') drone.state === 'crashed' ? reset() : drone.takeoff();
   else if (b === 'land') drone.land();
   else if (b === 'view') cycleView();
+  else if (b === 'modeUp' && arenaActive()) fire(); // oyun kolu: RB (tetikler gimbal tekeri olduğundan) arenada ateş
   else if (b === 'modeUp' || b === 'modeDown') {
     const order = ['C', 'N', 'S'];
     const i = order.indexOf(drone.mode) + (b === 'modeUp' ? 1 : -1);
@@ -760,12 +845,13 @@ function placeCode(p) {
   for (const ch of `${p.lat.toFixed(5)},${p.lon.toFixed(5)}`) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0;
   return h.toString(16).padStart(8, '0');
 }
+// Lazer arena açıksa oda adı ':arena' ile biter (köy dahil): aynı yer, ayrı oda
 const roomName = () =>
-  world.kind === 'village'
+  (world.kind === 'village'
     ? 'village'
     : isPreset(settings.place)
       ? `${world.kind}:${settings.place.lat.toFixed(4)},${settings.place.lon.toFixed(4)}`
-      : `${world.kind}:c${placeCode(settings.place)}`;
+      : `${world.kind}:c${placeCode(settings.place)}`) + (settings.arena ? ':arena' : '');
 let net = null;
 const ghosts = new Ghosts(scene, (id) => buildModelFor(id), (id) => {
   const v = VEHICLES[id] || VEHICLES.mini5;
@@ -789,6 +875,18 @@ function setOnline(on) {
   net = new NetClient({ url: ROOMS_URL, room: roomName(), name: pilotName(), vehicle: settings.drone, isVehicle: (v) => Object.hasOwn(VEHICLES, v) });
   net.onJoin = (p) => hud.toast(t('toast.joined', { name: p.name }), 'info', 3);
   net.onLeave = (p) => hud.toast(t('toast.left', { name: p.name }), 'info', 3);
+  // lazer arena: başkasının ateşi (çizgi + isabet), isabet bildirimi (skorlar net.me / peers'ta güncel)
+  net.onFire = (p, pos, dir) => {
+    if (settings.arena) onPeerFire(p, pos, dir);
+  };
+  net.onHit = (h) => {
+    if (!settings.arena) return;
+    const nameOf = (id) => (id === net.id ? pilotName() : net.peers.get(id)?.name || 'Pilot');
+    if (h.id === net.id) hud.toast(t('arena.hitYou', { name: nameOf(h.by) }), 'bad', 2);
+    else if (h.by === net.id) hud.toast(t('arena.youHit', { name: nameOf(h.id) }), 'info', 2);
+    else hud.toast(t('arena.hit', { a: nameOf(h.by), b: nameOf(h.id) }), 'info', 2);
+  };
+  arenaRespawn();
 }
 const _nq = new THREE.Quaternion();
 function sendOnline() {
@@ -870,10 +968,13 @@ $('ldFix').onclick = () => {
 // "Yükle ve başla" sayfayı yeniler; yenilenince hazır olur olmaz kendiliğinden başlar.
 const AUTOSTART = 'dji-sim-autostart';
 let wantStart = false;
+let autoArena = false; // yalnız "Yükle ve başla" yenilemesinde, kullanıcının o oturumda seçtiği lazer arena korunur
 try {
-  if (sessionStorage.getItem(AUTOSTART)) {
+  const v = sessionStorage.getItem(AUTOSTART);
+  if (v) {
     sessionStorage.removeItem(AUTOSTART);
     wantStart = true;
+    autoArena = v === 'arena';
   }
 } catch {}
 
@@ -908,6 +1009,8 @@ function renderSummary() {
   $('sumPlace').textContent = pick.world === 'village' ? t('worldVillage') : placeLabel(pick.place);
   $('sumMap').textContent = t({ village: 'worldVillage', osm: 'worldOsm', sat: 'worldSat', google: 'worldGoogle' }[pick.world] || 'worldOsm');
   $('sumMap').parentElement.classList.toggle('hidden', pick.world === 'village');
+  $('sumModeRow').classList.toggle('hidden', !settings.arena);
+  $('sumMode').textContent = t('modeArena');
   // sekme başlıklarında güncel seçim
   $('tabVehicle').textContent = vehName(settings.drone).replace('DJI ', '');
   $('tabPlace').textContent = pick.world === 'village' ? t('worldVillage') : placeLabel(pick.place).split(' · ')[0];
@@ -1091,7 +1194,7 @@ $('startRc').onclick = () => {
     settings.gKey = typedKey();
     save();
     try {
-      sessionStorage.setItem(AUTOSTART, '1');
+      sessionStorage.setItem(AUTOSTART, settings.arena ? 'arena' : '1');
     } catch {}
     return location.reload();
   }
@@ -1172,12 +1275,13 @@ const lobby = createLobby({
   el: $('lobby'),
   roomsUrl: ROOMS_URL,
   onUpdate: (n) => ($('tabOnline').textContent = n ? t('pilotsOnline', { n }) : '—'),
-  onJoin: ({ world: w, place }) => {
+  onJoin: ({ world: w, place, arena }) => {
     pick.world = w;
     if (place) {
       pick.place = place;
       placeTab = place.group;
     }
+    setArena(!!arena);
     if (!settings.online) onOnline(true);
     steps.vehicle = steps.place = true;
     renderWorld();
@@ -1208,7 +1312,7 @@ function setLang(l) {
   hud.lastState = null;
   lobby.setLang();
   rcSetup.setLang();
-  rc.touch?.setLabels({ takeoff: t('takeoff'), land: t('land'), rth: t('rth'), view: t('viewBtn') });
+  rc.touch?.setLabels({ takeoff: t('takeoff'), land: t('land'), rth: t('rth'), view: t('viewBtn'), fire: t('arena.fire') });
   refreshStart();
 }
 document.querySelectorAll('.lang-seg button').forEach((b) => (b.onclick = () => setLang(b.dataset.lang)));
@@ -1256,6 +1360,18 @@ const onOnline = (on) => {
   setOnline(on);
 };
 $('onlineChk').onchange = (e) => onOnline(e.target.checked);
+// online mod: serbest uçuş / lazer arena (oda adına ':arena' eklenir)
+const arenaBtns = document.querySelectorAll('#arenaSeg button');
+function setArena(on) {
+  settings.arena = !!on;
+  save();
+  arenaBtns.forEach((b) => b.classList.toggle('on', (b.dataset.arena === '1') === settings.arena));
+  $('arenaNote').classList.toggle('hidden', !settings.arena);
+  renderSummary();
+}
+arenaBtns.forEach((b) => (b.onclick = () => setArena(b.dataset.arena === '1')));
+// açılış hep serbest uçuş; arena yalnız bu sekmede seçilir (ya da seçildikten sonraki otomatik yenilemede sürer)
+setArena(autoArena);
 $('setOnline').onchange = (e) => onOnline(e.target.checked);
 $('pilotName').oninput = (e) => {
   settings.pilotName = e.target.value.trim().slice(0, 20);
@@ -1460,6 +1576,16 @@ function frame(now) {
 
   const tSec = now / 1000;
   updateModel(dt, tSec);
+  // arena: lazerler, düşüşten sonra otomatik yeniden başlama, dokunulmazlıkta yanıp sönme, sarsıntı sönümü
+  lasers.update(now);
+  arena.shake *= Math.exp(-dt / 0.12);
+  if (arena.respawnAt && now >= arena.respawnAt) {
+    arena.respawnAt = 0;
+    if (drone.state === 'crashed') reset();
+  }
+  const shielded = arenaActive() && now < arena.shieldUntil;
+  model.root.visible = !shielded || Math.floor(now / 110) % 2 === 0;
+  rc.touch?.setFire(arenaActive());
   sendOnline();
   // diğer pilotlarla ilgili bir hata kendi uçuşumuzu ve çizimi asla durdurmasın
   try {
@@ -1515,9 +1641,10 @@ function frame(now) {
     pilot: null,
     home: homeMarker(),
     peers: net ? ghosts.radar() : [],
+    arena: arenaActive() ? { lives: Math.max(0, LIVES - arena.hits), rows: arenaRows() } : null,
   });
 }
 requestAnimationFrame(frame);
 
 // test ve hata ayıklama için
-window.sim = { pickDone: () => { steps.vehicle = steps.place = true; refreshStart(); }, get drone() { return drone; }, get model() { return model; }, get peers() { return ghosts.radar(); }, THREE, setCraft: (id) => setDroneId(id), rc, world, settings, camera, renderer };
+window.sim = { pickDone: () => { steps.vehicle = steps.place = true; refreshStart(); }, get drone() { return drone; }, get model() { return model; }, get peers() { return ghosts.radar(); }, get net() { return net; }, THREE, setCraft: (id) => setDroneId(id), rc, world, settings, camera, renderer, fire, get arena() { return { ...arena, active: arenaActive(), lives: Math.max(0, LIVES - arena.hits), beams: lasers.active.length }; } };

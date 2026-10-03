@@ -35,6 +35,11 @@
     </div>
 
     <div id="course" class="course"></div>
+    <div id="arena" class="arena hidden">
+      <div class="arena-head"><span data-i18n="arena.title"></span><span id="arenaLives" class="arena-lives"><i></i><i></i><i></i></span></div>
+      <div class="arena-cols"><span data-i18n="arena.k"></span><span data-i18n="arena.d"></span></div>
+      <ol id="arenaRows" class="arena-rows"></ol>
+    </div>
     <div id="toast" class="toast"></div>
     <div id="rec" class="rec hidden"><i></i>REC <span id="recTime">00:00</span></div>
     <div id="viewName" class="view-name"></div>
@@ -97,6 +102,7 @@
     </div>
 
     <div id="flash" class="flash"></div>
+    <div id="hitFlash" class="hit-flash"></div>
 
     <div id="crash" class="crash hidden">
       <h2 id="crashTitle" data-i18n="crashTitle"></h2>
@@ -210,7 +216,17 @@
             <div class="pane-foot"><button type="button" id="nextPlace" class="next-btn"><span data-i18n="usePlace"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></button></div>
           </section>
 
-          <section class="l-sec pane" data-pane="online"><div id="lobby"></div></section>
+          <section class="l-sec pane" data-pane="online">
+            <div class="mode-row">
+              <span data-i18n="modeLabel"></span>
+              <div class="seg" id="arenaSeg">
+                <button type="button" data-arena="0" data-i18n="modeFree"></button>
+                <button type="button" data-arena="1" data-i18n="modeArena"></button>
+              </div>
+              <small id="arenaNote" data-i18n="modeArenaDesc"></small>
+            </div>
+            <div id="lobby"></div>
+          </section>
 
           <section class="l-sec pane help-pane" data-pane="help">
             <div class="help">
@@ -236,6 +252,7 @@
           <dl class="sum-list">
             <div><dt data-i18n="sumPlace"></dt><dd id="sumPlace"></dd></div>
             <div><dt data-i18n="sumMap"></dt><dd id="sumMap"></dd></div>
+            <div id="sumModeRow" class="hidden"><dt data-i18n="sumMode"></dt><dd id="sumMode"></dd></div>
           </dl>
           <div class="online-sec">
             <label class="check-row"><input type="checkbox" id="onlineChk"> <span data-i18n="onlineFly"></span></label>
