@@ -64,8 +64,9 @@ data:
     add_header Cross-Origin-Opener-Policy "same-origin" always;
     add_header Permissions-Policy "geolocation=(self), serial=(self), gamepad=(self), camera=(), microphone=(), payment=()" always;
     # CSP: betik yalnız kendi sunucumuzdan (+ index.html'deki importmap'in sabit özeti, + Draco wasm);
-    # harita karoları (Google/Esri/OpenFreeMap/AWS) için https: geniş bırakıldı, online oda yalnız wss kendi alanımız.
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'sha256-47SYuv52ST9yQ76ncm8OHvWn4zem0EXrZt9l4WuC2XY=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https: wss://drone.sewerk.de; worker-src 'self' blob:; font-src 'self' data:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'" always;
+    # harita karoları (Google/Esri/OpenFreeMap/AWS/R2) için https: geniş bırakıldı, online oda yalnız wss kendi alanımız;
+    # blob:/data: şart: GLTFLoader gömülü dokuları blob adresinden fetch eder (yoksa 3B karolar dokusuz kalır).
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'sha256-47SYuv52ST9yQ76ncm8OHvWn4zem0EXrZt9l4WuC2XY=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https: wss://drone.sewerk.de blob: data:; worker-src 'self' blob:; font-src 'self' data:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'" always;
 ---
 apiVersion: apps/v1
 kind: Deployment
