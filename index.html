@@ -165,22 +165,22 @@
       <div class="l-body">
         <div class="l-main">
           <nav class="l-tabs" role="tablist">
-            <button type="button" role="tab" data-tab="vehicle" class="on"><em>01</em><span><b data-i18n="secVehicle"></b><small id="tabVehicle"></small></span></button>
-            <button type="button" role="tab" data-tab="place"><em>02</em><span><b data-i18n="sumPlace"></b><small id="tabPlace"></small></span></button>
+            <button type="button" role="tab" data-tab="place" class="on"><em>01</em><span><b data-i18n="sumPlace"></b><small id="tabPlace"></small></span></button>
+            <button type="button" role="tab" data-tab="vehicle"><em>02</em><span><b data-i18n="secVehicle"></b><small id="tabVehicle"></small></span></button>
             <button type="button" role="tab" data-tab="online"><em>03</em><span><b>Online</b><small id="tabOnline"></small></span></button>
             <button type="button" role="tab" data-tab="help"><em>?</em><span><b data-i18n="controls"></b><small data-i18n="tabHelpSub"></small></span></button>
           </nav>
-          <section class="l-sec pane on" data-pane="vehicle">
+          <section class="l-sec pane" data-pane="vehicle">
             <div id="droneCards" class="drone-cards"></div>
             <div class="speed-row">
               <span data-i18n="speed"></span>
               <input type="range" id="speedMul" min="1" max="5" step="0.25" data-i18n-aria="speedMul">
               <b id="speedVal"></b>
             </div>
-            <div class="pane-foot"><button type="button" id="nextVehicle" class="next-btn"><span data-i18n="nextPlace"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></div>
+            <div class="pane-foot"><button type="button" id="nextVehicle" class="next-btn"><span data-i18n="usePlace"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></div>
           </section>
 
-          <section class="l-sec pane" data-pane="place">
+          <section class="l-sec pane on" data-pane="place">
             <div class="world-tiles">
               <button type="button" data-world="sat"><b data-i18n="worldSat"></b><span data-i18n="worldSatDesc"></span></button>
               <button type="button" data-world="nrw"><b data-i18n="worldNrw"></b><span data-i18n="worldNrwDesc"></span></button>
@@ -214,7 +214,7 @@
               </details>
             </div>
             <p id="villageNote" class="hint world-note"></p>
-            <div class="pane-foot"><button type="button" id="nextPlace" class="next-btn"><span data-i18n="usePlace"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></button></div>
+            <div class="pane-foot"><button type="button" id="nextPlace" class="next-btn"><span data-i18n="nextVehicle"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></button></div>
           </section>
 
           <section class="l-sec pane" data-pane="online">
@@ -262,7 +262,8 @@
           <footer class="l-foot">
             <button id="startRc" class="primary big" data-i18n="start"></button>
             <p id="startMsg" class="msg"></p>
-            <button type="button" id="serialBtn" class="hidden" data-i18n="connectSerial"></button>
+            <button type="button" id="serialBtn" class="hidden"></button>
+            <p id="serialMsg" class="msg"></p>
           </footer>
         </aside>
       </div>

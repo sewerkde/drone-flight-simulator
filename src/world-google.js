@@ -13,7 +13,7 @@ import { lang } from './i18n.js';
 // Google'ın 3D verisi büyük şehirlerde ve ünlü noktalarda en detaylı.
 // group: near | wonders | beauty | tr | eu | am | asia (t('pg.' + group)); name = Türkçe ad (kayıtlı ayarlar bununla eşleşir), names = diğer diller
 // face: başlangıçta bakılan nokta; g3d: Google'da fotogerçekçi 3B bina modeli var mı (yaklaşık)
-export const PLACES = [
+const ALL_PLACES = [
   // varsayılan: belediye binasının önündeki açık meydan (Rathausvorplatz), binaya bakar.
   // Willy-Brandt-Platz'ın doğu ucu: iki ağaç sırasının arasından, ~100 m ötedeki kuleye bakar. Google 3D yakından
   // (25 m) cepheleri erimiş gösteriyordu; uzaktan bina bütün ve net görünür. Uydu fotoğrafıyla seçildi.
@@ -21,6 +21,16 @@ export const PLACES = [
     names: { en: 'Lünen · Town Hall', de: 'Lünen · Rathaus' } },
   // gölün güney ucundaki açık futbol sahası; kuzeye, 560 m'lik göl boyunca bakar
   { group: 'near', name: 'Lünen · Cappenberger See', lat: 51.63073, lon: 7.53658, face: [51.634, 7.5368], g3d: true },
+  // Lünen 3B (RVR) için ek yerler; konumlar Nominatim, başlangıç yapının yanındaki açık alanda, yapıya bakar
+  { group: 'near', name: 'Lünen · St. Marien Kilisesi', lat: 51.6163, lon: 7.5214, face: [51.61672, 7.52117], g3d: true,
+    names: { en: "Lünen · St. Mary's Church", de: 'Lünen · St. Marien' } },
+  // başlangıç noktası düzeltilecek (ağaç/duvar önünde başlıyor): { group: 'near', name: 'Lünen · Colani UFO', lat: 51.6042, lon: 7.452, face: [51.60471, 7.45294], g3d: true },
+  { group: 'near', name: 'Lünen · Schwansbell Şatosu', lat: 51.603, lon: 7.5385, face: [51.60343, 7.5373], g3d: true,
+    names: { en: 'Lünen · Schwansbell Castle', de: 'Lünen · Schloss Schwansbell' } },
+  // (Seepark) Horstmarer See'nin batı kıyısı (OSM göl sınırı + 25 m), gölün üstünden doğuya bakar
+  // başlangıç noktası düzeltilecek (ağaç/duvar önünde başlıyor): { group: 'near', name: 'Lünen · Seepark', lat: 51.59715, lon: 7.54016, face: [51.59795, 7.54373], g3d: true },
+  // başlangıç noktası düzeltilecek (ağaç/duvar önünde başlıyor): { group: 'near', name: 'Lünen · Ana Tren İstasyonu', lat: 51.6171, lon: 7.528, face: [51.61769, 7.52875], g3d: true,
+  // names: { en: 'Lünen · Main Station', de: 'Lünen · Hauptbahnhof' } },
   // stadyumun ortası; Sarı Duvar'a (güney tribünü) bakar
   { group: 'near', name: 'Dortmund · Signal Iduna Park', lat: 51.4926, lon: 7.4519, face: [51.4917, 7.4518], g3d: true },
   // Dünyanın 7 yeni harikası + Giza; yanındaki açık alanda (meydan, teras, köprü), yapıya bakarak yerden başlar
@@ -77,6 +87,10 @@ export const PLACES = [
     names: { en: 'Sydney · Opera House view', de: 'Sydney · Blick auf das Opernhaus' } },
 ];
 
+// Şimdilik yalnız Lünen (04.10, Lünen 3B ile): diğer yerler burada duruyor, ONLY_LUNEN = false ile geri gelir
+export const ONLY_LUNEN = true;
+export const PLACES = ONLY_LUNEN ? ALL_PLACES.filter((p) => p.name.startsWith('Lünen')) : ALL_PLACES;
+
 // Seçili dilde yer adı. Kayıtlı ayarlardaki eski nesneler için koordinatla listeden bulunur.
 export function placeLabel(p) {
   if (!p) return '';
@@ -109,7 +123,12 @@ export function buildGoogleWorld(scene, renderer, camera, { key, url, credit = '
   tiles.lruCache.maxSize = 8000;
   tiles.lruCache.minBytesSize = 0.8 * 2 ** 30;
   tiles.lruCache.maxBytesSize = 1.5 * 2 ** 30;
-  tiles.downloadQueue.maxJobs = 20;
+  tiles.downloadQueue.maxJobsPerOrigin = 20;
+  if (url) {
+    // şehir mesh'i (RVR): küçük ve çok sayıda karo, derin ağaç → kardeş karoları önden indirme, daha çok paralel istek
+    tiles.loadSiblings = false;
+    tiles.downloadQueue.maxJobsPerOrigin = 96;
+  }
   const maxAniso = renderer.capabilities.getMaxAnisotropy();
   tiles.setCamera(camera);
   tiles.setResolutionFromRenderer(camera, renderer);
@@ -175,10 +194,24 @@ export function buildGoogleWorld(scene, renderer, camera, { key, url, credit = '
   function probeStart(now) {
     // C) Kalkış noktası bulundu: kamera yerde başlangıç bakışında, ince karolar tam inene kadar bekle
     //    (en fazla 15 sn), sonra hazır: kalite için birkaç saniye beklemeye değer.
+    //    Derin karo ağaçlarında (RVR: 13 seviye, iç içe tileset dosyaları) ilerleme bir seviye bitince bir an %100 görünür,
+    //    sonraki seviye istenmeden "hazır" denirdi. Bu yüzden kuyruk boş + görünen en ince karo 2 sn değişmemiş olmalı.
     if (state.phase === 'detay') {
-      if (tiles.loadProgress >= 0.995) state.fullSince ||= now;
+      if (now - state.lastProbe < 250) return;
+      state.lastProbe = now;
+      let minGE = Infinity;
+      for (const t of tiles.visibleTiles) if (t.geometricError < minGE) minGE = t.geometricError;
+      if (minGE < state.minGE - 1e-6) {
+        state.minGE = minGE;
+        state.geSince = now;
+      }
+      const s = tiles.stats;
+      // url'li (kendi) karo setlerinde loadProgress iç içe tileset'lerle eksiye bile düşüyor → yalnız kuyruğa bak
+      const idle = (url || tiles.loadProgress >= 0.995) && !s.queued && !s.downloading && !s.parsing;
+      if (idle) state.fullSince ||= now;
       else state.fullSince = 0;
-      if ((state.fullSince && now - state.fullSince > 1200) || now - state.detailAt > 15000) state.phase = 'hazır';
+      const settled = state.fullSince && now - state.fullSince > 1500 && now - state.geSince > 2000;
+      if (settled || now - state.detailAt > (url ? 35000 : 15000)) state.phase = 'hazır';
       return;
     }
     if (state.phase === 'hazır' || state.phase === 'hata' || now - state.lastProbe < 300) return;
@@ -212,6 +245,8 @@ export function buildGoogleWorld(scene, renderer, camera, { key, url, credit = '
       state.phase = 'detay';
       state.detailAt = now;
       state.fullSince = 0;
+      state.minGE = Infinity;
+      state.geSince = now;
     }
   }
 
@@ -308,7 +343,8 @@ export function buildGoogleWorld(scene, renderer, camera, { key, url, credit = '
   }
 
   function stats() {
-    const s = { phase: state.phase, progress: +tiles.loadProgress.toFixed(2), ground0: state.ground0, spot: state.spot, rays, rayMs: rays ? +(rayMs / rays).toFixed(2) : 0, error: state.error };
+    const q = tiles.stats;
+    const s = { phase: state.phase, progress: +tiles.loadProgress.toFixed(2), queue: [q.queued, q.downloading, q.parsing], minGE: +(state.minGE ?? 0).toFixed?.(2), ground0: state.ground0, spot: state.spot, rays, rayMs: rays ? +(rayMs / rays).toFixed(2) : 0, error: state.error };
     rayMs = 0;
     rays = 0;
     return s;

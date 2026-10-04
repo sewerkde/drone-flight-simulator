@@ -9,7 +9,7 @@ const DEFAULTS = {
   debug: false,
   view: 'chase', // yeni ziyaretçi drone'u sahnede görerek başlar
   best: null,
-  world: 'sat', // sat (uydu 3B, varsayılan) | osm (açık harita, hafif) | google (kendi anahtarınla) | village
+  world: 'nrw', // nrw (Lünen 3B, varsayılan; karo adresi yoksa sat'a düşer) | sat (uydu 3B) | osm (açık harita, hafif) | google (kendi anahtarınla) | village
   gKey: '',
   place: { group: 'near', name: 'Lünen · Belediye Binası', lat: 51.61432, lon: 7.52245, face: [51.614214, 7.520984], g3d: true, names: { en: 'Lünen · Town Hall', de: 'Lünen · Rathaus' } },
   quality: 'high', // normal | high | ultra (gerçek dünya)

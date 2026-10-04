@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { createControllers } from './controllers.js';
 import { Input } from './input.js';
 import { buildWorld } from './world.js';
-import { buildGoogleWorld, PLACES, placeLabel } from './world-google.js';
+import { buildGoogleWorld, PLACES, ONLY_LUNEN, placeLabel } from './world-google.js';
 import { buildOsmWorld } from './world-osm.js';
 import { buildNrwWorld, nrwArea } from './world-nrw.js';
 import { Drone, MODES, DRONES } from './flight.js';
@@ -65,6 +65,11 @@ scene.add(sun, sun.target);
 const freshPlace = PLACES.find((p) => p.name === settings.place?.name);
 if (freshPlace && JSON.stringify(freshPlace) !== JSON.stringify(settings.place)) {
   settings.place = freshPlace;
+  save();
+}
+// şimdilik yalnız Lünen: kayıtlı yer Lünen'in hazır yerlerinden değilse varsayılana (Belediye Binası) dön
+if (ONLY_LUNEN && !freshPlace) {
+  settings.place = PLACES[0];
   save();
 }
 // Dünya: açık harita (OSM, varsayılan, anahtarsız) | Google 3D (kendi anahtarınla) | köy (internetsiz)
@@ -410,9 +415,17 @@ function updateCamera(dt) {
     if (!detailT0) detailT0 = performance.now();
     const a = (world.startYaw || 0) + ((performance.now() - detailT0) / 40000) * Math.PI * 2;
     const g0 = world.groundAt(0, 0, 50);
+    // şehir mesh'i (Lünen 3B): kalkışta kamera çok yakın → en ince karolar gerekir; yörünge daha yakından döner
     camera.layers.disable(1);
-    camera.position.set(Math.sin(a) * 90, g0 + 50, Math.cos(a) * 90);
-    camera.lookAt(0, g0 + 8, 0);
+    if (world.kind === 'nrw') {
+      // şehir mesh'i (Lünen 3B): kalkış bakışında sabit dur; dönen kamera hep yeni karo isteyip kuyruğu boşaltmıyordu
+      const y0 = world.startYaw || 0;
+      camera.position.set(Math.sin(y0) * 6, g0 + 3, Math.cos(y0) * 6);
+      camera.lookAt(-Math.sin(y0) * 20, g0 + 3, -Math.cos(y0) * 20);
+    } else {
+      camera.position.set(Math.sin(a) * 90, g0 + 50, Math.cos(a) * 90);
+      camera.lookAt(0, g0 + 8, 0);
+    }
     camera.fov = 55;
     camera.updateProjectionMatrix();
     return;
@@ -996,7 +1009,12 @@ try {
 // Seçim Başla'ya basınca uygulanır.
 const pick = { world: settings.world, place: settings.place };
 // Adımlar: önce araç, sonra konum seçilmeden Başla açılmaz (otomatik başlatmada seçim zaten yapılmış)
-const steps = { vehicle: wantStart, place: wantStart };
+let preloadTab = null;
+try {
+  preloadTab = sessionStorage.getItem('dji-sim-preload');
+  sessionStorage.removeItem('dji-sim-preload');
+} catch {}
+const steps = { vehicle: wantStart, place: wantStart || !!preloadTab };
 function markStep(name) {
   steps[name] = true;
   document.querySelectorAll('.l-tabs button').forEach((b) => b.classList.toggle('done', !!steps[b.dataset.tab]));
@@ -1155,6 +1173,12 @@ $('myLocBtn').onclick = () => {
     { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
   );
 };
+// yalnız Lünen modunda konumum ve koordinat girişi gizli
+if (ONLY_LUNEN) {
+  $('placeSearch').classList.add('hidden');
+  $('myLocBtn').classList.add('hidden');
+  $('coord').closest('details').classList.add('hidden');
+}
 if (!PLACES.some((p) => samePlace(p, settings.place))) {
   $('coord').value = `${settings.place.lat}, ${settings.place.lon}`;
   $('coord').closest('details').open = true;
@@ -1198,7 +1222,33 @@ function needsReload() {
   return false;
 }
 
-$('serialBtn').onclick = () => rc.connectSerial().catch(() => {});
+const PRELOAD = 'dji-sim-preload';
+function applyPick() {
+  settings.world = pick.world;
+  settings.place = pick.place;
+  settings.gKey = typedKey();
+  save();
+}
+// Konum seçildi ve yüklü haritadan farklıysa: kaydet, sayfayı yenile, açılınca istenen sekmeye dön (Başla basılmadan)
+function preloadPick(tab) {
+  if (wantStart || !steps.place || !needsReload()) return false;
+  if (pick.world === 'google' && !typedKey()) return false;
+  if (pick.world === 'nrw' && !nrwArea(pick.place)) return false;
+  applyPick();
+  try {
+    sessionStorage.setItem(PRELOAD, tab);
+  } catch {}
+  location.reload();
+  return true;
+}
+
+// Kumanda düğmesi: Chrome/Edge'de USB izni ister; Safari/Firefox USB'ye erişemez → nedenini söyler
+$('serialBtn').onclick = () => {
+  // ayrı satır: Başla altındaki durum yazısı 300 ms'de bir yenileniyor, üstüne yazmasın
+  if (!rc.serialSupported) return ($('serialMsg').textContent = t('serialNeedsChromeMsg'));
+  $('serialMsg').textContent = '';
+  rc.connectSerial().catch(() => ($('serialMsg').textContent = t('serialReplug')));
+};
 $('startRc').onclick = () => {
   if (pick.world === 'google' && !typedKey()) {
     startMsg(t('keyEnter'));
@@ -1206,10 +1256,7 @@ $('startRc').onclick = () => {
     return $('gKey').focus();
   }
   if (needsReload()) {
-    settings.world = pick.world;
-    settings.place = pick.place;
-    settings.gKey = typedKey();
-    save();
+    applyPick();
     try {
       sessionStorage.setItem(AUTOSTART, settings.arena ? 'arena' : '1');
     } catch {}
@@ -1262,8 +1309,11 @@ function refreshStart() {
   badge.classList.toggle('ok', rc.live);
   badge.querySelector('.dot').className = `dot ${rc.live ? 'ok' : ''}`;
   badge.querySelector('span').textContent = rc.live ? srcLabel() : t('rcNotFound');
-  // köprü yokken Chrome'da DJI kumandayı USB'den bağlama düğmesi
-  $('serialBtn').classList.toggle('hidden', !(rc.serialSupported && !rc.live && !rc.bridge?.connected));
+  // köprü yokken kumanda düğmesi: Chrome/Edge'de USB'den bağlar, diğer tarayıcılarda Chrome/Edge'e yönlendirir
+  const sb = $('serialBtn');
+  sb.classList.toggle('hidden', !!(rc.live || rc.bridge?.connected));
+  if (rc.live) $('serialMsg').textContent = '';
+  sb.textContent = t(rc.serialSupported ? 'connectSerial' : 'serialNeedsChrome');
   if (world.phase === 'hata' && world.kind === 'google') $('keyForm').classList.remove('hidden');
 }
 setInterval(() => {
@@ -1273,22 +1323,31 @@ setInterval(() => {
 if (wantStart && realWorld && !world.ready) showLoading(true);
 renderWorld();
 renderPlaces();
+if (preloadTab) {
+  queueMicrotask(() => {
+    markStep('place');
+    setTab(preloadTab);
+  });
+}
 
 // Şu an online uçanlar: liste + dünya haritası; Katıl = o dünya ve yeri seçip başla
 // Başlangıç ekranı sekmeleri: her bölüm tek ekrana sığar, kaydırma gerekmez
 function setTab(name) {
+  // Konumdan çıkarken seçilen harita henüz yüklü değilse sayfa hemen yenilenir: harita arka planda yüklenirken araç seçilir
+  if (name !== 'place' && preloadPick(name)) return;
   document.querySelectorAll('.l-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === name));
   document.querySelectorAll('.l-main .pane').forEach((p) => p.classList.toggle('on', p.dataset.pane === name));
 }
 document.querySelectorAll('.l-tabs button').forEach((b) => (b.onclick = () => setTab(b.dataset.tab)));
 // adım düğmeleri: Araç → Devam (konuma geç), Konum → Burada uç (Başla açılır)
-$('nextVehicle').onclick = () => {
-  markStep('vehicle');
-  setTab('place');
-};
+// adım düğmeleri: Konum → Devam (araca geç; gerekirse harita arka planda yüklenmeye başlar), Araç → Burada uç (Başla)
 $('nextPlace').onclick = () => {
   markStep('place');
-  if (!steps.vehicle) return setTab('vehicle');
+  setTab('vehicle');
+};
+$('nextVehicle').onclick = () => {
+  markStep('vehicle');
+  if (!steps.place) return setTab('place');
   $('startRc').focus();
 };
 
