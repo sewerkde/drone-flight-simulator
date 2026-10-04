@@ -48,7 +48,8 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(62, 1, 0.05, 6000);
 camera.rotation.order = 'YXZ';
 
-scene.add(new THREE.HemisphereLight(0xcfe3ff, 0x4f5f33, 1.1));
+const hemi = new THREE.HemisphereLight(0xcfe3ff, 0x4f5f33, 1.1);
+scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff1dc, 2.4);
 const SUN_DIR = new THREE.Vector3(-0.45, 0.8, 0.35).normalize();
 sun.castShadow = true;
@@ -82,6 +83,11 @@ const world = useGoogle
     ? buildOsmWorld(scene, renderer, camera, { ...worldOpts, imagery: settings.world === 'sat' })
     : buildWorld(scene, renderer);
 const realWorld = world.kind !== 'village';
+// NRW mesh gölgelenirken: ortofotoda güneş zaten var → gök ışığı baskın, güneş zayıf (ikinci gölge binmesin)
+if (world.kind === 'nrw') {
+  hemi.intensity = 2.3;
+  sun.intensity = 0.9;
+}
 // Kalkış her zaman yerden; flight.js reset'teki askıda başlama kapalı
 world.startAlt = 0;
 // gerçek dünyada gimbal başta neredeyse düz: öndeki bulanık zemin yerine meydan ve simge yapı görünsün

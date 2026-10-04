@@ -126,7 +126,11 @@ export function buildGoogleWorld(scene, renderer, camera, { key, url, credit = '
       if (!o.isMesh) return;
       const old = o.material;
       if (old.map) old.map.anisotropy = maxAniso; // eğik bakışta zemin dokusu keskin kalsın
-      o.material = new THREE.MeshBasicMaterial({ map: old.map || null, color: old.map ? 0xffffff : old.color });
+      if (url) {
+        // NRW mesh: dokuda gölge yok (ortofoto), cepheler düz kalıyor → normal hesapla, gök + güneşle hafif gölgele
+        if (!o.geometry.attributes.normal) o.geometry.computeVertexNormals();
+        o.material = new THREE.MeshLambertMaterial({ map: old.map || null, color: old.map ? 0xffffff : old.color });
+      } else o.material = new THREE.MeshBasicMaterial({ map: old.map || null, color: old.map ? 0xffffff : old.color });
       o.material.toneMapped = false;
       old.dispose();
     });
