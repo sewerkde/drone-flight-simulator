@@ -83,11 +83,6 @@ const world = useGoogle
     ? buildOsmWorld(scene, renderer, camera, { ...worldOpts, imagery: settings.world === 'sat' })
     : buildWorld(scene, renderer);
 const realWorld = world.kind !== 'village';
-// NRW mesh gölgelenirken: ortofotoda güneş zaten var → gök ışığı baskın, güneş zayıf (ikinci gölge binmesin)
-if (world.kind === 'nrw') {
-  hemi.intensity = 2.3;
-  sun.intensity = 0.9;
-}
 // Kalkış her zaman yerden; flight.js reset'teki askıda başlama kapalı
 world.startAlt = 0;
 // gerçek dünyada gimbal başta neredeyse düz: öndeki bulanık zemin yerine meydan ve simge yapı görünsün
