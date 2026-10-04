@@ -19,6 +19,7 @@ data:
   head.html: |
       <meta name="rc-bridge" content="off">
       <meta name="rooms-url" content="wss://drone.sewerk.de/rooms">
+      <meta name="nrw-tiles-base" content="https://drone-tiles.sewerk.de">
       <meta name="description" content="Fly a drone in your browser over real places — with a real DJI RC-N3, a gamepad, the keyboard or touch. Google 3D, satellite and OpenStreetMap worlds, online rooms. Open source.">
       <link rel="canonical" href="https://drone.sewerk.de/">
       <meta property="og:type" content="website">
