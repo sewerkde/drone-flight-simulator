@@ -25,8 +25,13 @@ const ALL_PLACES = [
   { group: 'near', name: 'Lünen · St. Marien Kilisesi', lat: 51.6163, lon: 7.5214, face: [51.61672, 7.52117], g3d: true,
     names: { en: "Lünen · St. Mary's Church", de: 'Lünen · St. Marien' } },
   // başlangıç noktası düzeltilecek (ağaç/duvar önünde başlıyor): { group: 'near', name: 'Lünen · Colani UFO', lat: 51.6042, lon: 7.452, face: [51.60471, 7.45294], g3d: true },
-  { group: 'near', name: 'Lünen · Schwansbell Şatosu', lat: 51.603, lon: 7.5385, face: [51.60343, 7.5373], g3d: true,
+  // şatonun kuzeybatısındaki açık çimenlik (uydu fotoğrafıyla seçildi; eski nokta ağaçların içindeydi), şatoya bakar
+  { group: 'near', name: 'Lünen · Schwansbell Şatosu', lat: 51.60374, lon: 7.53681, face: [51.60343, 7.5373], g3d: true,
     names: { en: 'Lünen · Schwansbell Castle', de: 'Lünen · Schloss Schwansbell' } },
+  // Selm'de ama Lünen 3B karolarının içinde: şatonun batısındaki açık çayır, şato ve kiliseye bakar
+  // karoları (RVR Selm) depoya alınınca açılacak:
+  // { group: 'near', area: 'lunen', name: 'Cappenberg Şatosu', lat: 51.65083, lon: 7.53749, face: [51.65066, 7.5389], g3d: true,
+  //   names: { en: 'Cappenberg Castle', de: 'Schloss Cappenberg' } },
   // (Seepark) Horstmarer See'nin batı kıyısı (OSM göl sınırı + 25 m), gölün üstünden doğuya bakar
   // başlangıç noktası düzeltilecek (ağaç/duvar önünde başlıyor): { group: 'near', name: 'Lünen · Seepark', lat: 51.59715, lon: 7.54016, face: [51.59795, 7.54373], g3d: true },
   // başlangıç noktası düzeltilecek (ağaç/duvar önünde başlıyor): { group: 'near', name: 'Lünen · Ana Tren İstasyonu', lat: 51.6171, lon: 7.528, face: [51.61769, 7.52875], g3d: true,
@@ -89,7 +94,7 @@ const ALL_PLACES = [
 
 // Şimdilik yalnız Lünen (04.10, Lünen 3B ile): diğer yerler burada duruyor, ONLY_LUNEN = false ile geri gelir
 export const ONLY_LUNEN = true;
-export const PLACES = ONLY_LUNEN ? ALL_PLACES.filter((p) => p.name.startsWith('Lünen')) : ALL_PLACES;
+export const PLACES = ONLY_LUNEN ? ALL_PLACES.filter((p) => p.name.startsWith('Lünen') || p.area === 'lunen') : ALL_PLACES;
 
 // Seçili dilde yer adı. Kayıtlı ayarlardaki eski nesneler için koordinatla listeden bulunur.
 export function placeLabel(p) {

@@ -251,12 +251,13 @@ const rc = createControllers({
 });
 // Yayında: Mac'te serve.py (baslat.command) açıksa kumanda ona bağlanır; Safari'de USB'ye erişmenin tek yolu bu.
 // Bir kez kısa yoklama: yoksa sessizce vazgeç (ziyaretçilerde sürekli yeniden bağlanma ve konsol gürültüsü olmasın).
+// Chrome/Edge'de yoklama yok: yerel ağ izni sorardı, orada Web Serial var. Safari/Firefox'ta sessizce yoklanır.
 const LOCAL_BRIDGE = 'http://localhost:8765';
-if (!rc.bridge && !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) {
+const probeBridge = () =>
   fetch(`${LOCAL_BRIDGE}/rc-ping`, { signal: AbortSignal.timeout(1500), cache: 'no-store' })
-    .then((r) => r.ok && rc.attachBridge(`${LOCAL_BRIDGE}/rc`))
-    .catch(() => {});
-}
+    .then((r) => (r.ok ? (rc.attachBridge(`${LOCAL_BRIDGE}/rc`), true) : false))
+    .catch(() => false);
+if (!rc.bridge && !rc.serialSupported && !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) probeBridge();
 const srcLabel = () =>
   ({ bridge: 'DJI RC-N3', serial: 'DJI RC-N3 (USB)', touch: t('srcTouch') })[rc.source] || rc.sourceName;
 rc.onSource = (src) => document.body.classList.toggle('touch-ui', src === 'touch');
@@ -1253,7 +1254,12 @@ function preloadPick(tab) {
 // Kumanda düğmesi: Chrome/Edge'de USB izni ister; Safari/Firefox USB'ye erişemez → nedenini söyler
 $('serialBtn').onclick = () => {
   // ayrı satır: Başla altındaki durum yazısı 300 ms'de bir yenileniyor, üstüne yazmasın
-  if (!rc.serialSupported) return ($('serialMsg').textContent = t('serialNeedsChromeMsg'));
+  if (!rc.serialSupported) {
+    // köprü sonradan açılmış olabilir: bir daha yokla, yoksa nasıl açılacağını söyle
+    $('serialMsg').textContent = '';
+    probeBridge().then((ok) => !ok && ($('serialMsg').textContent = t('serialNeedsChromeMsg')));
+    return;
+  }
   $('serialMsg').textContent = '';
   rc.connectSerial().catch(() => ($('serialMsg').textContent = t('serialReplug')));
 };
