@@ -69,7 +69,7 @@ if (freshPlace && JSON.stringify(freshPlace) !== JSON.stringify(settings.place))
 // Dünya: açık harita (OSM, varsayılan, anahtarsız) | Google 3D (kendi anahtarınla) | köy (internetsiz)
 const useGoogle = settings.world === 'google' && settings.gKey && settings.place;
 // Lünen 3B yalnız karo adresi varsa (yayında <meta nrw-tiles-base>, yerelde ./tiles) sunulur
-const NRW_ON = IS_LOCAL || !!document.querySelector('meta[name="nrw-tiles-base"]');
+const NRW_ON = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || !!document.querySelector('meta[name="nrw-tiles-base"]');
 if (settings.world === 'nrw' && !NRW_ON) settings.world = 'sat';
 const useNrw = settings.world === 'nrw' && !!nrwArea(settings.place);
 const useOsm = (settings.world === 'osm' || settings.world === 'sat') && settings.place;
