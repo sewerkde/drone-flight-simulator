@@ -91,7 +91,7 @@ if (world.kind === 'nrw') {
 // Kalkış her zaman yerden; flight.js reset'teki askıda başlama kapalı
 world.startAlt = 0;
 // gerçek dünyada gimbal başta neredeyse düz: öndeki bulanık zemin yerine meydan ve simge yapı görünsün
-world.startGimbal = realWorld ? -3 : -12;
+world.startGimbal = world.kind === 'nrw' ? -10 : realWorld ? -3 : -12;
 // Başlangıç yönü: yerin 'face' noktasına bak (-z kuzey, +x doğu; yaw 0 = kuzey, artı = sola)
 world.startYaw = 0;
 if (realWorld && settings.place?.face) {
@@ -475,8 +475,10 @@ function updateCamera(dt) {
     camera.layers.enable(3);
     const real = d.kind === 'plane' && vSpec.kind === 'real';
     // Mesafe sabit, yalnız yön yumuşatılır; böylece hız arttıkça kamera geride kalmaz.
-    const dist = d.kind === 'plane' ? (real ? 26 : 3.8) : 2.4 * sc;
-    const up = d.kind === 'plane' ? (real ? 6.5 : 1.0) : 0.8 * sc;
+    // Lünen 3B (NRW mesh): cepheler alçaktan erimiş görünür → takip kamerası daha yüksek ve geriden, çatılara bakar
+    const nrwCam = world.kind === 'nrw';
+    const dist = d.kind === 'plane' ? (real ? 26 : 3.8) : (nrwCam ? 4.2 : 2.4) * sc;
+    const up = d.kind === 'plane' ? (real ? 6.5 : 1.0) : (nrwCam ? 2.0 : 0.8) * sc;
     const heading = d.kind === 'plane' ? d.forward(_dir) : _dir.copy(f);
     heading.y = d.kind === 'plane' ? heading.y * 0.5 : 0;
     heading.normalize();

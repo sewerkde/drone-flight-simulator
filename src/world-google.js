@@ -130,6 +130,15 @@ export function buildGoogleWorld(scene, renderer, camera, { key, url, credit = '
         // NRW mesh: dokuda gölge yok (ortofoto), cepheler düz kalıyor → normal hesapla, gök + güneşle hafif gölgele
         if (!o.geometry.attributes.normal) o.geometry.computeVertexNormals();
         o.material = new THREE.MeshLambertMaterial({ map: old.map || null, color: old.map ? 0xffffff : old.color });
+        // ortofoto renkleri soluk: hafif doygunluk + kontrast (Google'ın canlı görünümüne yaklaşsın)
+        o.material.onBeforeCompile = (sh) => {
+          sh.fragmentShader = sh.fragmentShader.replace(
+            '#include <map_fragment>',
+            '#include <map_fragment>\n' +
+              'diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114))), diffuseColor.rgb, 1.18);\n' +
+              'diffuseColor.rgb = clamp((diffuseColor.rgb - 0.5) * 1.08 + 0.5, 0.0, 1.0);'
+          );
+        };
       } else o.material = new THREE.MeshBasicMaterial({ map: old.map || null, color: old.map ? 0xffffff : old.color });
       o.material.toneMapped = false;
       old.dispose();
