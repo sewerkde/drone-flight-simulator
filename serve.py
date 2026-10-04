@@ -226,9 +226,26 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         ".wasm": "application/wasm",
     }
 
+    # drone.sewerk.de (Safari dahil) Mac'teki köprüden kumanda verisini okuyabilsin; başka siteler okuyamaz
+    ALLOWED_ORIGINS = {"https://drone.sewerk.de"}
+
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")
+        origin = self.headers.get("Origin", "")
+        if origin in self.ALLOWED_ORIGINS and self.path.split("?")[0] in ("/rc", "/rc-ping"):
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Access-Control-Allow-Private-Network", "true")
+            self.send_header("Vary", "Origin")
         super().end_headers()
+
+    def do_OPTIONS(self):
+        # Chrome'un yerel ağ erişimi ön kontrolü (Private Network Access)
+        if not self.local_host():
+            return
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Methods", "GET")
+        self.send_header("Access-Control-Allow-Headers", "*")
+        self.end_headers()
 
     def log_message(self, *args):
         pass
@@ -265,6 +282,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         if not self.local_host():
+            return
+        if self.path.split("?")[0] == "/rc-ping":
+            self.send_response(204)
+            self.end_headers()
             return
         if self.path.split("?")[0] != "/rc":
             return super().do_GET()

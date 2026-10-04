@@ -60,22 +60,12 @@ export class Controllers {
     this._serialMode = null;
     this._dead = false;
 
-    this.bridge = opts.bridge === false ? null : new BridgeRc(typeof opts.bridge === 'string' ? opts.bridge : '/rc');
+    this.bridge = null;
+    if (opts.bridge !== false) this.attachBridge(typeof opts.bridge === 'string' ? opts.bridge : '/rc');
     this.serial = null; // DjiRc: connectSerial() ya da otomatik bağlantı ile
     this.gamepad = opts.gamepad === false ? null : new GamepadSource(opts.gamepad || {});
     this.touch = opts.touch === false ? null : new TouchSource(opts.touch || {});
 
-    if (this.bridge) {
-      this.bridge.onButton = (n) => {
-        if (!this.disabled.has('bridge')) this._emit(n);
-      };
-      this.bridge.onMode = (m) => {
-        if (this.disabled.has('bridge')) return;
-        this.switchMode = m;
-        this.onMode?.(m);
-      };
-      this.bridge.onChange = () => this.update();
-    }
     // Oyun kolu ayrı bir cihaz: tuşları etkin kaynak başkası olsa da iletilir (sticks yalnız etkin kaynaktan).
     if (this.gamepad) this.gamepad.onButton = (n) => !this.disabled.has('gamepad') && this._emit(n);
     if (this.touch) this.touch.onButton = (n) => !this.disabled.has('touch') && this._emit(n);
@@ -99,6 +89,21 @@ export class Controllers {
         if (!this.bridge?.connected && !this.serial) this._autoSerial();
       }, 2500);
     }
+  }
+
+  // serve.py köprüsüne bağlan (yerelde '/rc'; yayında Mac'teki köprü bulununca 'http://localhost:8765/rc')
+  attachBridge(url) {
+    if (this.bridge) return;
+    this.bridge = new BridgeRc(url);
+    this.bridge.onButton = (n) => {
+      if (!this.disabled.has('bridge')) this._emit(n);
+    };
+    this.bridge.onMode = (m) => {
+      if (this.disabled.has('bridge')) return;
+      this.switchMode = m;
+      this.onMode?.(m);
+    };
+    this.bridge.onChange = () => this.update();
   }
 
   get supported() {

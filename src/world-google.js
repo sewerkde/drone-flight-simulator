@@ -205,13 +205,20 @@ export function buildGoogleWorld(scene, renderer, camera, { key, url, credit = '
         state.minGE = minGE;
         state.geSince = now;
       }
+      // ekranda hâlâ inceltilmesi gereken karo (hata payı hedefin üstünde, yaprak değil) var mı?
+      let unrefined = 0;
+      for (const t of tiles.visibleTiles) {
+        const tr = t.traversal;
+        if (tr && !tr.isLeaf && tr.error > tiles.errorTarget) unrefined++;
+      }
+      state.unrefined = unrefined;
       const s = tiles.stats;
       // url'li (kendi) karo setlerinde loadProgress iç içe tileset'lerle eksiye bile düşüyor → yalnız kuyruğa bak
-      const idle = (url || tiles.loadProgress >= 0.995) && !s.queued && !s.downloading && !s.parsing;
+      const idle = (url || tiles.loadProgress >= 0.995) && !s.queued && !s.downloading && !s.parsing && !unrefined;
       if (idle) state.fullSince ||= now;
       else state.fullSince = 0;
       const settled = state.fullSince && now - state.fullSince > 1500 && now - state.geSince > 2000;
-      if (settled || now - state.detailAt > (url ? 35000 : 15000)) state.phase = 'hazır';
+      if (settled || now - state.detailAt > (url ? 45000 : 15000)) state.phase = 'hazır';
       return;
     }
     if (state.phase === 'hazır' || state.phase === 'hata' || now - state.lastProbe < 300) return;
@@ -344,7 +351,7 @@ export function buildGoogleWorld(scene, renderer, camera, { key, url, credit = '
 
   function stats() {
     const q = tiles.stats;
-    const s = { phase: state.phase, progress: +tiles.loadProgress.toFixed(2), queue: [q.queued, q.downloading, q.parsing], minGE: +(state.minGE ?? 0).toFixed?.(2), ground0: state.ground0, spot: state.spot, rays, rayMs: rays ? +(rayMs / rays).toFixed(2) : 0, error: state.error };
+    const s = { phase: state.phase, progress: +tiles.loadProgress.toFixed(2), queue: [q.queued, q.downloading, q.parsing], unrefined: state.unrefined, minGE: +(state.minGE ?? 0).toFixed?.(2), ground0: state.ground0, spot: state.spot, rays, rayMs: rays ? +(rayMs / rays).toFixed(2) : 0, error: state.error };
     rayMs = 0;
     rays = 0;
     return s;

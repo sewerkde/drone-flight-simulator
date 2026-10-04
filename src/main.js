@@ -249,6 +249,14 @@ const rc = createControllers({
   gamepad: { preset: settings.gamepadPreset },
   touch: { labels: { takeoff: t('takeoff'), land: t('land'), rth: t('rth'), view: t('viewBtn'), fire: t('arena.fire') } },
 });
+// Yayında: Mac'te serve.py (baslat.command) açıksa kumanda ona bağlanır; Safari'de USB'ye erişmenin tek yolu bu.
+// Bir kez kısa yoklama: yoksa sessizce vazgeç (ziyaretçilerde sürekli yeniden bağlanma ve konsol gürültüsü olmasın).
+const LOCAL_BRIDGE = 'http://localhost:8765';
+if (!rc.bridge && !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) {
+  fetch(`${LOCAL_BRIDGE}/rc-ping`, { signal: AbortSignal.timeout(1500), cache: 'no-store' })
+    .then((r) => r.ok && rc.attachBridge(`${LOCAL_BRIDGE}/rc`))
+    .catch(() => {});
+}
 const srcLabel = () =>
   ({ bridge: 'DJI RC-N3', serial: 'DJI RC-N3 (USB)', touch: t('srcTouch') })[rc.source] || rc.sourceName;
 rc.onSource = (src) => document.body.classList.toggle('touch-ui', src === 'touch');
