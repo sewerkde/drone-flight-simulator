@@ -91,13 +91,14 @@ export const QUALITY = { normal: 16, high: 8, ultra: 2 }; // ultra: çekim için
 const DOWN = new THREE.Vector3(0, -1, 0);
 
 // Google Photorealistic 3D Tiles. Seçilen nokta 0,0'da, zemin y≈0, -z kuzey, +x doğu.
-export function buildGoogleWorld(scene, renderer, camera, { key, lat, lon, quality = 'high' }) {
+// url verilirse Google yerine kendi karo setimiz (NRW) yüklenir: kimlik eklentisi yok, telif satırı credit, tür kind
+export function buildGoogleWorld(scene, renderer, camera, { key, url, credit = 'Google', kind = 'google', lat, lon, quality = 'high' }) {
   addSky(scene, 2000, 12000);
   camera.far = 15000;
   camera.updateProjectionMatrix();
 
-  const tiles = new TilesRenderer();
-  tiles.registerPlugin(new GoogleCloudAuthPlugin({ apiToken: key, autoRefreshToken: true }));
+  const tiles = url ? new TilesRenderer(url) : new TilesRenderer();
+  if (!url) tiles.registerPlugin(new GoogleCloudAuthPlugin({ apiToken: key, autoRefreshToken: true }));
   const draco = new DRACOLoader().setDecoderPath('./vendor/draco/');
   tiles.registerPlugin(new GLTFExtensionsPlugin({ dracoLoader: draco }));
   tiles.registerPlugin(new ReorientationPlugin({ lat: lat * DEG, lon: lon * DEG, height: 0, recenter: true }));
@@ -293,7 +294,7 @@ export function buildGoogleWorld(scene, renderer, camera, { key, lat, lon, quali
     if (now - creditT > 1000) {
       creditT = now;
       const list = tiles.getAttributions().filter((a) => a.type === 'string').map((a) => a.value);
-      creditText = ['Google', ...list].join(' · ');
+      creditText = [credit, ...list].join(' · ');
     }
     return creditText;
   }
@@ -314,7 +315,7 @@ export function buildGoogleWorld(scene, renderer, camera, { key, lat, lon, quali
   }
 
   return {
-    kind: 'google',
+    kind,
     get ready() {
       return state.phase === 'hazır';
     },

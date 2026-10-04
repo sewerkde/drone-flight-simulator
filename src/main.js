@@ -4,6 +4,7 @@ import { Input } from './input.js';
 import { buildWorld } from './world.js';
 import { buildGoogleWorld, PLACES, placeLabel } from './world-google.js';
 import { buildOsmWorld } from './world-osm.js';
+import { buildNrwWorld, nrwArea } from './world-nrw.js';
 import { Drone, MODES, DRONES } from './flight.js';
 import { FpvDrone } from './fpv.js';
 import { Plane, PLANES } from './plane.js';
@@ -67,11 +68,17 @@ if (freshPlace && JSON.stringify(freshPlace) !== JSON.stringify(settings.place))
 }
 // Dünya: açık harita (OSM, varsayılan, anahtarsız) | Google 3D (kendi anahtarınla) | köy (internetsiz)
 const useGoogle = settings.world === 'google' && settings.gKey && settings.place;
+// Lünen 3B yalnız karo adresi varsa (yayında <meta nrw-tiles-base>, yerelde ./tiles) sunulur
+const NRW_ON = IS_LOCAL || !!document.querySelector('meta[name="nrw-tiles-base"]');
+if (settings.world === 'nrw' && !NRW_ON) settings.world = 'sat';
+const useNrw = settings.world === 'nrw' && !!nrwArea(settings.place);
 const useOsm = (settings.world === 'osm' || settings.world === 'sat') && settings.place;
 const worldOpts = { lat: settings.place?.lat, lon: settings.place?.lon, quality: settings.quality };
 const world = useGoogle
   ? buildGoogleWorld(scene, renderer, camera, { ...worldOpts, key: settings.gKey })
-  : useOsm
+  : useNrw
+    ? buildNrwWorld(scene, renderer, camera, worldOpts)
+    : useOsm
     ? buildOsmWorld(scene, renderer, camera, { ...worldOpts, imagery: settings.world === 'sat' })
     : buildWorld(scene, renderer);
 const realWorld = world.kind !== 'village';
@@ -995,11 +1002,13 @@ function markStep(name) {
 const samePlace = (a, b) => !!a && !!b && a.lat === b.lat && a.lon === b.lon;
 
 const segBtns = document.querySelectorAll('button[data-world]');
+document.querySelector('button[data-world="nrw"]').classList.toggle('hidden', !NRW_ON);
 function renderWorld() {
   segBtns.forEach((b) => b.classList.toggle('on', b.dataset.world === pick.world));
   $('realBox').classList.toggle('hidden', pick.world === 'village');
   // açıklama yalnız köyde (gerçek dünyada yer listesi zaten görünür)
-  $('villageNote').textContent = pick.world === 'village' ? t('villageNote') : pick.world === 'google' ? t('googleNote') : '';
+  $('villageNote').textContent =
+    pick.world === 'village' ? t('villageNote') : pick.world === 'google' ? t('googleNote') : pick.world === 'nrw' ? t(nrwArea(pick.place) ? 'nrwNote' : 'nrwOnly') : '';
   renderKey();
   renderSummary();
 }
@@ -1012,7 +1021,7 @@ function renderSummary() {
   $('sumName').textContent = vehName(settings.drone);
   $('sumSpec').textContent = `${kmh(v.top * settings.speedMul)} ${t('kmh')} ${t('maxSpeed')} · ${durLabel(v.flightMin)}`;
   $('sumPlace').textContent = pick.world === 'village' ? t('worldVillage') : placeLabel(pick.place);
-  $('sumMap').textContent = t({ village: 'worldVillage', osm: 'worldOsm', sat: 'worldSat', google: 'worldGoogle' }[pick.world] || 'worldOsm');
+  $('sumMap').textContent = t({ village: 'worldVillage', osm: 'worldOsm', sat: 'worldSat', google: 'worldGoogle', nrw: 'worldNrw' }[pick.world] || 'worldOsm');
   $('sumMap').parentElement.classList.toggle('hidden', pick.world === 'village');
   $('sumModeRow').classList.toggle('hidden', !settings.arena);
   $('sumMode').textContent = t('modeArena');
@@ -1239,6 +1248,10 @@ function refreshStart() {
   btn.classList.toggle('ready', steps.vehicle && steps.place);
   if (!wantStart && !(steps.vehicle && steps.place)) {
     btn.textContent = t(steps.vehicle ? 'pickPlaceFirst' : 'pickFirst');
+    btn.disabled = true;
+  } else if (!wantStart && pick.world === 'nrw' && !nrwArea(pick.place)) {
+    // Lünen 3B yalnız karo setinin kapsadığı yerlerde
+    btn.textContent = t('nrwOnlyShort');
     btn.disabled = true;
   }
   if (wantStart && world.ready && !reload) begin();
