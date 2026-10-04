@@ -18,5 +18,7 @@
 | [OpenFreeMap](https://openfreemap.org) / [OpenMapTiles](https://openmaptiles.org) vector tiles | buildings, roads, water, land use | Data © OpenStreetMap contributors ([ODbL](https://www.openstreetmap.org/copyright)), © OpenMapTiles |
 | [AWS Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) (Mapzen Terrarium) | terrain heights | see the dataset's attribution list |
 | [Natural Earth](https://www.naturalearthdata.com) 110m land (`assets/world-land.json`) | lobby world map | public domain |
+| [Regionalverband Ruhr – 3d.ruhr](https://3d.ruhr) 3D mesh 2025 (Lünen) | "Lünen 3D" map, served from our own storage | © RVR 2025, [Datenlizenz Deutschland – Namensnennung – 2.0](https://www.govdata.de/dl-de/by-2-0); attribution shown in the app |
+| [Geobasis NRW](https://www.bezreg-koeln.nrw.de/geobasis-nrw) 3D-Mesh, LoD2, DGM1 (research only, `research-nrw/`) | fallback pipeline for NRW cities outside the Ruhr | © Geobasis NRW, [dl-de/zero-2-0](https://www.govdata.de/dl-de/zero-2-0) |
 
 The drone models in `assets/models/` are original low-poly models made with `tools/build_drones.py` (Blender).
