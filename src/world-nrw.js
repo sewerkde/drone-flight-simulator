@@ -7,6 +7,8 @@ import { buildGoogleWorld } from './world-google.js';
 
 // Hazır şehir paketleri: enlem/boylam kutusu (karo seti bu alanı kapsar)
 export const NRW_AREAS = [
+  // Cappenberg Şatosu (Selm): RVR 2025 Selm mesh'inden yalnız şatonun 800 m çevresi (research-nrw/rvr/crawl_area.py)
+  { id: 'cappenberg', name: 'Cappenberg', lat: [51.644, 51.658], lon: [7.527, 7.551], credit: '3D: © RVR 2025 · dl-de/by-2-0' },
   { id: 'lunen', name: 'Lünen', lat: [51.578, 51.655], lon: [7.416, 7.592], credit: '3D: © RVR 2025 · dl-de/by-2-0' },
 ];
 

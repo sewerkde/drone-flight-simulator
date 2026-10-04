@@ -29,9 +29,8 @@ const ALL_PLACES = [
   { group: 'near', name: 'Lünen · Schwansbell Şatosu', lat: 51.60374, lon: 7.53681, face: [51.60343, 7.5373], g3d: true,
     names: { en: 'Lünen · Schwansbell Castle', de: 'Lünen · Schloss Schwansbell' } },
   // Selm'de ama Lünen 3B karolarının içinde: şatonun batısındaki açık çayır, şato ve kiliseye bakar
-  // karoları (RVR Selm) depoya alınınca açılacak:
-  // { group: 'near', area: 'lunen', name: 'Cappenberg Şatosu', lat: 51.65083, lon: 7.53749, face: [51.65066, 7.5389], g3d: true,
-  //   names: { en: 'Cappenberg Castle', de: 'Schloss Cappenberg' } },
+  { group: 'near', area: 'lunen', name: 'Cappenberg Şatosu', lat: 51.65083, lon: 7.53749, face: [51.65066, 7.5389], g3d: true,
+    names: { en: 'Cappenberg Castle', de: 'Schloss Cappenberg' } },
   // (Seepark) Horstmarer See'nin batı kıyısı (OSM göl sınırı + 25 m), gölün üstünden doğuya bakar
   // başlangıç noktası düzeltilecek (ağaç/duvar önünde başlıyor): { group: 'near', name: 'Lünen · Seepark', lat: 51.59715, lon: 7.54016, face: [51.59795, 7.54373], g3d: true },
   // başlangıç noktası düzeltilecek (ağaç/duvar önünde başlıyor): { group: 'near', name: 'Lünen · Ana Tren İstasyonu', lat: 51.6171, lon: 7.528, face: [51.61769, 7.52875], g3d: true,
