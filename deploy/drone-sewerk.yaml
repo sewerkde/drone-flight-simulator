@@ -94,7 +94,7 @@ spec:
         - name: fetch
           image: alpine/git:2.54.0
           env:
-            - { name: REV, value: "7ca23a42e80408505d23aff7d793263a339c4876" }
+            - { name: REV, value: "88b9f8d89917ac609012effaf326f3d4046e7c0a" }
             - { name: HOME, value: /tmp }
           command: ["sh", "-c"]
           args:
